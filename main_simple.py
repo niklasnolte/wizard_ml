@@ -4,6 +4,7 @@ import random
 import click
 import numpy as np
 
+
 trump = None
 
 def rotate(l, n):
@@ -142,12 +143,12 @@ class Player:
     def recieve_card(self, card):
         self.cards.append(card)
 
-    def play_card(self, color_to_serve=None):
+    def play_card(self, game, color_to_serve=None):
         while True:
             if self.random:
                 index = random.choice(list(range(len(self.cards))))
             else:
-                index = click.prompt("Pick index of card to play", type=int)
+                index = game.prompt("Pick index of card to play", type=int)
             try:
                 if color_to_serve and \
                    self.cards[index].color != color_to_serve and \
@@ -163,11 +164,11 @@ class Player:
             click.echo(f"[{i}] : {card}")
         click.echo()
 
-    def guess_tricks(self):
+    def guess_tricks(self, game):
         if self.random:
             self.guessed_tricks = random.choice(list(range(len(self.cards))))
         else:
-            self.guessed_tricks = click.prompt(f"Player {self.n}, how many tricks will you get?", type=int)
+            self.guessed_tricks = game.prompt(f"Player {self.n}, how many tricks will you get?", type=int)
         click.echo(f"Player {self.n} called {self.guessed_tricks} tricks!\n")
 
     def reset_tricks(self):
@@ -178,13 +179,15 @@ class Player:
         return [card.get_state() for card in self.cards]
 
 class Game:
-    def __init__(self, nplayers, random_idxs=[0,1]):
+    def __init__(self, nplayers, random_idxs=[0], pipe = None):
+        # if there is a pipe, we'll be getting instructions from somewhere else
         self.nplayers = nplayers
         self.players = [Player(i, i in random_idxs) for i in range(nplayers)]
         cards = CardStack()
         cards.shuffle()
         self.last_round = 2
         self.current_trick = []
+        self.pipe = pipe
 
     def play(self):
         click.echo("Lets go!")
@@ -227,7 +230,7 @@ class Game:
 
         for p in self.players:
             p.show_cards_with_index()
-            p.guess_tricks()
+            p.guess_tricks(self)
 
         winner_idx = 0 # not really, only the guy who starts
         players = list(self.players) # this list will be rotated to change the starting player
@@ -237,8 +240,7 @@ class Game:
             for p in players:
                 p.show_cards_with_index()
                 color_to_serve = self.current_trick.color_to_serve();
-                print(color_to_serve)
-                self.current_trick.add(p.play_card(color_to_serve)) #CONTINUE: use trick object and look for the color_to_serve
+                self.current_trick.add(p.play_card(self, color_to_serve)) #CONTINUE: use trick object and look for the color_to_serve
                 click.echo(f"\nCurrent trick: {self.current_trick}\n")
             winner_idx = self.current_trick.determine_winner()
             winner = players[winner_idx]
@@ -259,6 +261,16 @@ class Game:
         state.extend(self.current_trick.get_state())
         return state
 
+    def prompt(self, msg, type=int):
+        if not self.pipe:
+            return click.prompt(msg, type)
+        else:
+            self.pipe.send(self.get_state())
+            print(msg)
+            next_action = self.pipe.recv()
+            print(f"action: {next_action}")
+            return next_action
+
 # g = Game(click.prompt("Number of players?", type = int))
-g = Game(2)
-g.play()
+# game = Game(2)
+# game.play()

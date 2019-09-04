@@ -3,8 +3,8 @@ import gym
 from gym import spaces, logger
 from gym.utils import seeding
 import numpy as np
-from main_simple import card
-from main_simple import Game
+from main_simple import Card, Game
+import multiprocessing
 
 class Env(gym.Env):
     """
@@ -12,20 +12,20 @@ class Env(gym.Env):
         A pole is attached by an un-actuated joint to a cart, which moves along a frictionless track. The pendulum starts upright, and the goal is to prevent it from falling over by increasing and reducing the cart's velocity.
     Source:
         This environment corresponds to the version of the cart-pole problem described by Barto, Sutton, and Anderson
-    Observation: 
+    Observation:
         Type: Box(4)
         Num Observation                 Min         Max
         0   Cart Position             -4.8            4.8
         1   Cart Velocity             -Inf            Inf
         2   Pole Angle                 -24 deg        24 deg
         3   Pole Velocity At Tip      -Inf            Inf
-        
+
     Actions:
         Type: Discrete(2)
         Num Action
         0   Push cart to the left
         1   Push cart to the right
-        
+
         Note: The amount the velocity that is reduced or increased is not fixed; it depends on the angle the pole is pointing. This is because the center of gravity of the pole increases the amount of energy needed to move the cart underneath it
     Reward:
         Reward is 1 for every step taken, including the termination step
@@ -38,7 +38,7 @@ class Env(gym.Env):
         Solved Requirements
         Considered solved when the average reward is greater than or equal to 195.0 over 100 consecutive trials.
     """
-    
+
     metadata = {
         'render.modes': ['human', 'rgb_array'],
         'video.frames_per_second' : 50
@@ -69,22 +69,24 @@ class Env(gym.Env):
         self.action_space = spaces.Discrete(2)
 
         self.seed()
-        self.game = Game(4, [0])
+        self.reset()
 
-    def seed(self, seed=None):
+    def seed(self, seed=None): ##NOOP for now
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
     def step(self, action):
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
-        Game.
-
+        self.my_pipe_end.send(action)
+        self.state = self.my_pipe_end.recv() ##CONTINUE here with testing the pipe
+        reward = 0
+        done = False
         return np.array(self.state), reward, done, {}
 
     def reset(self):
-        self.state = self.np_random.uniform(low=-0.05, high=0.05, size=(4,))
-        self.steps_beyond_done = None
-        return np.array(self.state)
+        self.my_pipe_end, other_pipe_end = multiprocessing.pipe()
+        self.game_process = multiprocessing.Process(target = Game(2, [0], other_pipe_end).play)
+        self.state = self.my_pipe_end.recv()
 
     def render(self, mode='human'):
         raise NotImplementedError
