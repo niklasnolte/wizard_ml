@@ -183,6 +183,7 @@ class Game:
         # if there is a pipe, we'll be getting instructions from somewhere else
         self.nplayers = nplayers
         self.players = [Player(i, i in random_idxs) for i in range(nplayers)]
+        print(self.players)
         cards = CardStack()
         cards.shuffle()
         self.last_round = 2
@@ -203,8 +204,8 @@ class Game:
 
 
         winner = 0
-        score = self.players[0].score
-        for p in self.players[1:]:
+        score = -100 #small number
+        for p in self.players:
             if p.score > score:
                 winner = p.n
                 score = p.score
@@ -240,7 +241,7 @@ class Game:
             for p in players:
                 p.show_cards_with_index()
                 color_to_serve = self.current_trick.color_to_serve();
-                self.current_trick.add(p.play_card(self, color_to_serve)) #CONTINUE: use trick object and look for the color_to_serve
+                self.current_trick.add(p.play_card(self, color_to_serve))
                 click.echo(f"\nCurrent trick: {self.current_trick}\n")
             winner_idx = self.current_trick.determine_winner()
             winner = players[winner_idx]
@@ -263,7 +264,11 @@ class Game:
 
     def prompt(self, msg, type=int):
         if not self.pipe:
-            return click.prompt(msg, type)
+            while True:
+                try:
+                    return type(click.prompt(msg, type))
+                except TypeError:
+                    print("please give a valid input")
         else:
             self.pipe.send(self.get_state())
             print(msg)
@@ -271,6 +276,5 @@ class Game:
             print(f"action: {next_action}")
             return next_action
 
-# g = Game(click.prompt("Number of players?", type = int))
-# game = Game(2)
-# game.play()
+g = Game(click.prompt("Number of players?", type = int))
+g.play()
