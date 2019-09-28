@@ -39,11 +39,6 @@ class Env(gym.Env):
         Considered solved when the average reward is greater than or equal to 195.0 over 100 consecutive trials.
     """
 
-    metadata = {
-        'render.modes': ['human', 'rgb_array'],
-        'video.frames_per_second' : 50
-    }
-
     def __init__(self):
         # 0 = white
         # 1 = red
@@ -56,14 +51,17 @@ class Env(gym.Env):
 
         self.observation_space = spaces.Tuple(
             [score_space, #my score
-            score_space, #enemy score
-            score_space, #my trick guess
-            score_space, #enemy trick guess
-            cards_space, #enemies first card
-            cards_space, #enemies second card
-            cards_space, #my first card
-            cards_space, #my second card
-            cards_space, #first card in trick, only 2 players at max
+             score_space, #my trick guess
+             cards_space, #my first card
+             cards_space, #my second card
+             #
+             score_space, #enemies score
+             score_space, #enemies trick guess
+             cards_space, #enemies first card
+             cards_space, #enemies second card
+             #
+             cards_space, #first card in trick, lets play 2 players first
+             cards_space, #second card in trick
             ]
         )
 
@@ -81,7 +79,6 @@ class Env(gym.Env):
 
     def step(self, action):
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
-        print(f"sending action {action}")
         self.my_pipe_end.send(action)
         self.recv_state()
         print(f"recieved state {self.state}")

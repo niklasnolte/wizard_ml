@@ -42,7 +42,7 @@ class Card:
         self.value = value
 
     def __repr__(self):
-        return f"({self.color}, {self.value})"
+        return f"Card({self.color}, {self.value})"
 
     def is_wizard(self):
         return self.value == self.wizard_value
@@ -78,7 +78,7 @@ class Card:
             return self.value > other.value
 
     def get_state(self):
-        return [self.colorcode, self.value]
+        return (self.colorcode, self.value)
 
 class CardStack:
     all_cards = [Card(color, value) for value, color in
@@ -120,8 +120,14 @@ class Trick:
     def __str__(self):
         return str(self.cards)
 
-    def get_state(self):
-        return [card.get_state() for card in self.cards]
+    def get_state(self, game):
+        state = []
+        for i in range(game.last_round):
+            try:
+                state.append(self.cards[i].get_state())
+            except IndexError:
+                state.append(Card.make_invalid().get_state())
+        return state
 
     def determine_winner(self):
         winner = 0
@@ -175,17 +181,23 @@ class Player:
         self.guessed_tricks = -1
         self.trick_count = 0
 
-    def get_state(self):
-        return [card.get_state() for card in self.cards]
+    def get_state(self, game):
+        state = [self.score, self.guessed_tricks]
+        for i in range(game.last_round):
+            try:
+                state.append(self.cards[i].get_state())
+            except IndexError:
+                state.append(Card.make_invalid().get_state())
+        return state
 
 class Game:
     def __init__(self, nplayers, random_idxs=[0], pipe = None):
         # if there is a pipe, we'll be getting instructions from somewhere else
         self.nplayers = nplayers
+        self.last_round = 2
         self.players = [Player(i, i in random_idxs) for i in range(nplayers)]
         cards = CardStack()
         cards.shuffle()
-        self.last_round = 2
         self.current_trick = Trick()
         self.pipe = pipe
 
@@ -257,8 +269,8 @@ class Game:
     def get_state(self):
         state = []
         for p in self.players:
-            state.extend(p.get_state())
-        state.extend(self.current_trick.get_state())
+            state.extend(p.get_state(self))
+        state.extend(self.current_trick.get_state(self))
         return state
 
     def prompt(self, msg, type=int):
