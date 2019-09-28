@@ -183,11 +183,10 @@ class Game:
         # if there is a pipe, we'll be getting instructions from somewhere else
         self.nplayers = nplayers
         self.players = [Player(i, i in random_idxs) for i in range(nplayers)]
-        print(self.players)
         cards = CardStack()
         cards.shuffle()
         self.last_round = 2
-        self.current_trick = []
+        self.current_trick = Trick()
         self.pipe = pipe
 
     def play(self):
@@ -220,7 +219,7 @@ class Game:
 
     def play_round(self, Round):
         global trump
-        trump = random.choice(Card.normal_colors + (None,))
+        trump = None#random.choice(Card.normal_colors + (None,))
         click.echo(f"\nTRUMP FOR THIS ROUND: {trump}")
         print(f"\n\nStarting round {Round}\n")
         cards = CardStack()
@@ -276,5 +275,5 @@ class Game:
             print(f"action: {next_action}")
             return next_action
 
-g = Game(click.prompt("Number of players?", type = int))
-g.play()
+# g = Game(click.prompt("Number of players?", type = int))
+# g.play()

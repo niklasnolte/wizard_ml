@@ -51,11 +51,11 @@ class Env(gym.Env):
         # 3 = green
         # 4 = yellow
         # -1 - 14 = values (-1 = no card there)
-        cards_space = spaces.Box(low = [0,-1], high = [4,14])
-        score_space = spaces.Box(low = [0], high = [100])
+        cards_space = spaces.Box(low = np.array([0,-1]), high = np.array([4,14]))
+        score_space = spaces.Box(low = np.array([0]), high = np.array([100]))
 
         self.observation_space = spaces.Tuple(
-            score_space, #my score
+            [score_space, #my score
             score_space, #enemy score
             score_space, #my trick guess
             score_space, #enemy trick guess
@@ -64,6 +64,7 @@ class Env(gym.Env):
             cards_space, #my first card
             cards_space, #my second card
             cards_space, #first card in trick, only 2 players at max
+            ]
         )
 
         self.action_space = spaces.Discrete(2)
@@ -75,21 +76,28 @@ class Env(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
+    def recv_state(self):
+        self.state = self.my_pipe_end.recv()
+
     def step(self, action):
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
+        print(f"sending action {action}")
         self.my_pipe_end.send(action)
-        self.state = self.my_pipe_end.recv() ##CONTINUE here with testing the pipe
+        self.recv_state()
+        print(f"recieved state {self.state}")
         reward = 0
         done = False
         return np.array(self.state), reward, done, {}
 
     def reset(self):
-        self.my_pipe_end, other_pipe_end = multiprocessing.pipe()
+        self.my_pipe_end, other_pipe_end = multiprocessing.Pipe()
         self.game_process = multiprocessing.Process(target = Game(2, [0], other_pipe_end).play)
-        self.state = self.my_pipe_end.recv()
+        self.game_process.start()
+        self.recv_state()
 
     def render(self, mode='human'):
         raise NotImplementedError
 
     def close(self):
         pass
+
