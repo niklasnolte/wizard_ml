@@ -5,41 +5,15 @@ from gym.utils import seeding
 import numpy as np
 from main_simple import Card, Game
 import multiprocessing
+import matplotlib.pyplot as plt
+
+def _print(*args, **kwargs):
+    # return
+    return print(*args, **kwargs)
 
 class Env(gym.Env):
-    """
-    Description:
-        A pole is attached by an un-actuated joint to a cart, which moves along a frictionless track. The pendulum starts upright, and the goal is to prevent it from falling over by increasing and reducing the cart's velocity.
-    Source:
-        This environment corresponds to the version of the cart-pole problem described by Barto, Sutton, and Anderson
-    Observation:
-        Type: Box(4)
-        Num Observation                 Min         Max
-        0   Cart Position             -4.8            4.8
-        1   Cart Velocity             -Inf            Inf
-        2   Pole Angle                 -24 deg        24 deg
-        3   Pole Velocity At Tip      -Inf            Inf
 
-    Actions:
-        Type: Discrete(2)
-        Num Action
-        0   Push cart to the left
-        1   Push cart to the right
-
-        Note: The amount the velocity that is reduced or increased is not fixed; it depends on the angle the pole is pointing. This is because the center of gravity of the pole increases the amount of energy needed to move the cart underneath it
-    Reward:
-        Reward is 1 for every step taken, including the termination step
-    Starting State:
-        All observations are assigned a uniform random value in [-0.05..0.05]
-    Episode Termination:
-        Pole Angle is more than 12 degrees
-        Cart Position is more than 2.4 (center of the cart reaches the edge of the display)
-        Episode length is greater than 200
-        Solved Requirements
-        Considered solved when the average reward is greater than or equal to 195.0 over 100 consecutive trials.
-    """
-
-    def __init__(self):
+    def __init__(self, average_over = 50):
         # 0 = white
         # 1 = red
         # 2 = blue
@@ -66,10 +40,43 @@ class Env(gym.Env):
             ]
         )
 
-        self.action_space = spaces.Discrete(2)
+        self.i = 0
+
+        self.action_space = spaces.Discrete(3)
+
+        self.scores = []
+
+        self.average_over = average_over
+        self.fig, self.ax = plt.subplots()
+        self.line, = self.ax.plot([], [], 'x', lw=1, label='1 game')
+        self.avgline, = self.ax.plot(
+        [], [], lw=2, label='{} game average'.format(self.average_over))
+        self.ax.set_xlabel('games')
+        self.ax.set_ylabel('score')
+        self.ax.legend(loc='best', ncol=2)
+        self.lasttile = 1
+        plt.show(block=False)
 
         self.seed()
         self.reset()
+
+
+    def replot(self):
+        self.i += 1
+        self.line.set_data(range(len(self.scores)), self.scores)
+
+        if len(self.scores) % self.average_over == 0:
+            averages = np.mean(
+                np.array(self.average_over * [0] + self.scores).reshape(
+                    -1, self.average_over),
+                axis=1)
+            self.avgline.set_data(
+                self.average_over * np.array(range(len(averages))), averages)
+            self.fig.savefig('./wurst.pdf')
+
+        self.ax.set_xlim(0, len(self.scores))
+        self.ax.set_ylim(-5, 5)
+        self.fig.canvas.draw()
 
     def seed(self, seed=None): # TODO NOOP for now
         self.np_random, seed = seeding.np_random(seed)
@@ -85,29 +92,38 @@ class Env(gym.Env):
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
         self.my_pipe_end.send(action)
         self.recv_state()
-        print(f"recieved state {self.observation}")
+        _print(f"recieved state {self.observation}")
         def calculate_reward():
+            nothing_changed = all(self.last_observation == self.observation)
+            self.last_observation = self.observation
             if self.round_done or self.game_done:
                 # my score - opponents score
-                reward = self.observation[6] - self.observation[0]# - self.last_reward #TODO maybe but it back in
-                self.last_reward = reward
+                reward = self.observation[6]# - self.observation[0]# - self.last_scores #TODO maybe but it back in
+                self.last_score = reward
                 return reward
             else:
-                return 0
+                return -1*nothing_changed
 
         reward = calculate_reward()
+        _print("reward: ", reward)
         return self.observation, reward, self.game_done, {}
 
     def reset(self):
+        self.scores.append(self.last_score)
+        self.replot()
+
         self.my_pipe_end, other_pipe_end = multiprocessing.Pipe()
         self.game_process = multiprocessing.Process(target = Game(2, [0], other_pipe_end).play)
         self.game_process.start()
         self.recv_state()
-        self.last_reward = 0
+        self.last_score = 0
+        self.last_observation = 0
+        self.round_done = False
+        self.game_done = False
         return self.observation
 
     def render(self, mode='human'):
-        raise NotImplementedError
+        raise NotImplementedError('this does not exist yet')
 
     def close(self):
         pass

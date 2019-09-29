@@ -4,8 +4,14 @@ import random
 import click
 import numpy as np
 
+random.seed(42)
 
 trump = None
+
+def _print(*args, **kwargs):
+    # return
+    return print(*args, **kwargs)
+
 
 def rotate(l, n):
     return l[n:] + l[:n]
@@ -95,7 +101,7 @@ class CardStack:
         """
         shuffle the card deck
         """
-        random.shuffle(self.deck)
+        #random.shuffle(self.deck)
 
     def draw(self):
         return self.deck.pop(-1)
@@ -162,20 +168,20 @@ class Player:
                     raise IndexError(f"please serve {color_to_serve}")
                 return self.cards.pop(index)
             except IndexError:
-                click.echo("Please pick a valid index")
+                _print("Please pick a valid index")
 
     def show_cards_with_index(self):
-        click.echo(f"\n\nCards of Player {self.n}:")
+        _print(f"\n\nCards of Player {self.n}:")
         for i, card in enumerate(self.cards):
-            click.echo(f"[{i}] : {card}")
-        click.echo()
+            _print(f"[{i}] : {card}")
+        _print()
 
     def guess_tricks(self, game):
         if self.random:
             self.guessed_tricks = random.choice(list(range(len(self.cards))))
         else:
             self.guessed_tricks = game.prompt(f"Player {self.n}, how many tricks will you get?", type=int)
-        click.echo(f"Player {self.n} called {self.guessed_tricks} tricks!\n")
+        _print(f"Player {self.n} called {self.guessed_tricks} tricks!\n")
 
     def reset_tricks(self):
         self.guessed_tricks = -1
@@ -207,15 +213,15 @@ class Game:
         self.game_over = False
 
     def play(self):
-        click.echo("Lets go!")
+        _print("Lets go!")
 
         for r in range(1,self.last_round):
             self.play_round(r+1)
-            click.echo("Scores after round {}:\n".format(r+1))
+            _print("Scores after round {}:\n".format(r+1))
             for p in self.players:
-                click.echo(f"Player {p.n}: {p.score}")
+                _print(f"Player {p.n}: {p.score}")
                 p.reset_tricks()
-            click.echo("")
+            _print("")
             self.players = rotate(self.players, 1) # the next one starts
 
 
@@ -225,7 +231,7 @@ class Game:
             if p.score > score:
                 winner = p.n
                 score = p.score
-        click.echo(f"Congratz to Player {winner}, who won with a score of {score}")
+        _print(f"Congratz to Player {winner}, who won with a score of {score}")
         if self.pipe:
             self.game_over = True
             self.pipe.send(self.get_state())
@@ -240,8 +246,8 @@ class Game:
     def play_round(self, Round):
         global trump
         trump = None#random.choice(Card.normal_colors + (None,))
-        click.echo(f"\nTRUMP FOR THIS ROUND: {trump}")
-        print(f"\n\nStarting round {Round}\n")
+        _print(f"\nTRUMP FOR THIS ROUND: {trump}")
+        _print(f"\n\nStarting round {Round}\n")
         cards = CardStack()
         cards.shuffle()
         for _ in range(Round):
@@ -262,15 +268,15 @@ class Game:
                 p.show_cards_with_index()
                 color_to_serve = self.current_trick.color_to_serve();
                 self.current_trick.add(p.play_card(self, color_to_serve))
-                click.echo(f"\nCurrent trick: {self.current_trick}\n")
+                _print(f"\nCurrent trick: {self.current_trick}\n")
             winner_idx = self.current_trick.determine_winner()
             winner = players[winner_idx]
             winner.trick_count += 1
-            click.echo(f"Player {winner.n} won this trick.\n\n")
+            _print(f"Player {winner.n} won this trick.\n\n")
             for p in players:
-                click.echo(f"Player {p.n}, you now have {p.trick_count} tricks, and you need {p.guessed_tricks}")
-            click.echo("")
-            click.echo(f"\nState: {self.get_state()}\n")
+                _print(f"Player {p.n}, you now have {p.trick_count} tricks, and you need {p.guessed_tricks}")
+            _print("")
+            _print(f"\nState: {self.get_state()}\n")
 
         for p in self.players:
             p.score += self.determine_score(p.guessed_tricks, p.trick_count)
@@ -296,12 +302,12 @@ class Game:
                 try:
                     return type(click.prompt(msg, type))
                 except TypeError:
-                    print("please give a valid input")
+                    _print("please give a valid input")
         else:
             self.pipe.send(self.get_state(**kwargs))
-            print(msg)
+            _print(msg)
             next_action = self.pipe.recv()
-            print(f"action: {next_action}")
+            _print(f"action: {next_action}")
             return next_action
 
 # g = Game(click.prompt("Number of players?", type = int))

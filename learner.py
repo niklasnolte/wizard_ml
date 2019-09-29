@@ -17,8 +17,7 @@ nb_actions = env.action_space.n
 
 model = Sequential()
 model.add(Flatten(input_shape=(1,16)))
-model.add(Dense(4, init='random_uniform', activation='relu'))
-# model.add(Dense(16, init='random_uniform', activation='relu'))
+model.add(Dense(16, init='random_uniform', activation='relu'))
 model.add(Dense(nb_actions, init='random_uniform', activation='linear'))
 print(model.summary())
 
@@ -31,19 +30,19 @@ args = {
     'nb_actions':          nb_actions,
     'memory':              memory,
     'batch_size':          64,
-    'target_model_update': 1e-2,
+    'target_model_update': 1e-1,
     'policy':              BoltzmannQPolicy(),
 }
 args['nb_steps_warmup'] = max(30, args['batch_size'])
 
 dqn = DQNAgent(**args)
-dqn.compile(Adam(lr=1e-3), metrics=['mae'])
+dqn.compile(Adam(lr=1e-1), metrics=['mae'])
 
 # fitting step
-dqn.fit(env, nb_steps=500000, visualize=False, verbose=2)
+dqn.fit(env, nb_steps=50000, visualize=False, verbose=1)
 
 # After training is done, we save the final weights.
 dqn.save_weights('dqn_learned_weights.h5f', overwrite=True)
 
 # Finally, evaluate our algorithm for 5 episodes.
-dqn.test(env, nb_episodes=10, visualize=True)
+dqn.test(env, nb_episodes=10, visualize=False)
