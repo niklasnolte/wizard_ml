@@ -181,6 +181,9 @@ class Player:
         self.guessed_tricks = -1
         self.trick_count = 0
 
+    def __repr__(self):
+        return f"Player(n={self.n},score={self.score})"
+
     def get_state(self, game):
         state = [self.score, self.guessed_tricks]
         for i in range(game.last_round):
@@ -200,11 +203,13 @@ class Game:
         cards.shuffle()
         self.current_trick = Trick()
         self.pipe = pipe
+        self.round_finished = False
+        self.game_over = False
 
     def play(self):
         click.echo("Lets go!")
 
-        for r in range(self.last_round):
+        for r in range(1,self.last_round):
             self.play_round(r+1)
             click.echo("Scores after round {}:\n".format(r+1))
             for p in self.players:
@@ -215,12 +220,15 @@ class Game:
 
 
         winner = 0
-        score = -100 #small number
+        score = -1000 #small number
         for p in self.players:
             if p.score > score:
                 winner = p.n
                 score = p.score
         click.echo(f"Congratz to Player {winner}, who won with a score of {score}")
+        if self.pipe:
+            self.game_over = True
+            self.pipe.send(self.get_state())
 
     @staticmethod
     def determine_score(guess, count):
@@ -243,6 +251,7 @@ class Game:
         for p in self.players:
             p.show_cards_with_index()
             p.guess_tricks(self)
+        self.round_finished = False # new round begins
 
         winner_idx = 0 # not really, only the guy who starts
         players = list(self.players) # this list will be rotated to change the starting player
@@ -265,15 +274,23 @@ class Game:
 
         for p in self.players:
             p.score += self.determine_score(p.guessed_tricks, p.trick_count)
+        self.round_finished = True # round ends
+
 
     def get_state(self):
         state = []
-        for p in self.players:
+        rotate_idx = 0
+        for i,p in enumerate(self.players):
+            if p.n == 0:
+                rotate_idx = i
+        for p in rotate(self.players, rotate_idx):
             state.extend(p.get_state(self))
         state.extend(self.current_trick.get_state(self))
+        state.append(self.round_finished)
+        state.append(self.game_over)
         return state
 
-    def prompt(self, msg, type=int):
+    def prompt(self, msg, type=int, **kwargs):
         if not self.pipe:
             while True:
                 try:
@@ -281,7 +298,7 @@ class Game:
                 except TypeError:
                     print("please give a valid input")
         else:
-            self.pipe.send(self.get_state())
+            self.pipe.send(self.get_state(**kwargs))
             print(msg)
             next_action = self.pipe.recv()
             print(f"action: {next_action}")

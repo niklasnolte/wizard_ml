@@ -48,17 +48,18 @@ class Env(gym.Env):
         # -1 - 14 = values (-1 = no card there)
         cards_space = spaces.Box(low = np.array([0,-1]), high = np.array([4,14]))
         score_space = spaces.Box(low = np.array([0]), high = np.array([100]))
+        # TODO make player space to abstract further
 
         self.observation_space = spaces.Tuple(
-            [score_space, #my score
-             score_space, #my trick guess
-             cards_space, #my first card
-             cards_space, #my second card
+            [score_space, # enemies score
+             score_space, # enemies trick guess
+             cards_space, # enemies first card
+             cards_space, # enemies second card
              #
-             score_space, #enemies score
-             score_space, #enemies trick guess
-             cards_space, #enemies first card
-             cards_space, #enemies second card
+             score_space, # my score
+             score_space, # my trick guess
+             cards_space, # my first card
+             cards_space, # my second card
              #
              cards_space, #first card in trick, lets play 2 players first
              cards_space, #second card in trick
@@ -70,27 +71,39 @@ class Env(gym.Env):
         self.seed()
         self.reset()
 
-    def seed(self, seed=None): ##NOOP for now
+    def seed(self, seed=None): # TODO NOOP for now
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
     def recv_state(self):
-        self.state = self.my_pipe_end.recv()
+        state = self.my_pipe_end.recv()
+        self.state = np.array(state[:-2])
+        self.round_done = state[-2]
+        self.game_done = state[-1]
 
     def step(self, action):
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
         self.my_pipe_end.send(action)
         self.recv_state()
         print(f"recieved state {self.state}")
-        reward = 0
-        done = False
-        return np.array(self.state), reward, done, {}
+        def calculate_reward():
+            if self.round_done or self.game_done:
+                # my score - opponents score
+                reward = self.state[4] - self.state[0]# - self.last_reward #TODO maybe but it back in
+                self.last_reward = reward
+                return reward
+            else:
+                return 0
+
+        reward = calculate_reward()
+        return self.state, reward, self.game_done, {}
 
     def reset(self):
         self.my_pipe_end, other_pipe_end = multiprocessing.Pipe()
         self.game_process = multiprocessing.Process(target = Game(2, [0], other_pipe_end).play)
         self.game_process.start()
         self.recv_state()
+        self.last_reward = 0
 
     def render(self, mode='human'):
         raise NotImplementedError
