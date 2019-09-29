@@ -77,7 +77,7 @@ class Env(gym.Env):
 
     def recv_state(self):
         state = self.my_pipe_end.recv()
-        self.state = np.array(state[:-2])
+        self.observation = np.array(state[:-2])
         self.round_done = state[-2]
         self.game_done = state[-1]
 
@@ -85,18 +85,18 @@ class Env(gym.Env):
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
         self.my_pipe_end.send(action)
         self.recv_state()
-        print(f"recieved state {self.state}")
+        print(f"recieved state {self.observation}")
         def calculate_reward():
             if self.round_done or self.game_done:
                 # my score - opponents score
-                reward = self.state[4] - self.state[0]# - self.last_reward #TODO maybe but it back in
+                reward = self.observation[6] - self.observation[0]# - self.last_reward #TODO maybe but it back in
                 self.last_reward = reward
                 return reward
             else:
                 return 0
 
         reward = calculate_reward()
-        return self.state, reward, self.game_done, {}
+        return self.observation, reward, self.game_done, {}
 
     def reset(self):
         self.my_pipe_end, other_pipe_end = multiprocessing.Pipe()
@@ -104,6 +104,7 @@ class Env(gym.Env):
         self.game_process.start()
         self.recv_state()
         self.last_reward = 0
+        return self.observation
 
     def render(self, mode='human'):
         raise NotImplementedError

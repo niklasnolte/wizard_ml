@@ -124,9 +124,9 @@ class Trick:
         state = []
         for i in range(game.last_round):
             try:
-                state.append(self.cards[i].get_state())
+                state.extend(self.cards[i].get_state())
             except IndexError:
-                state.append(Card.make_invalid().get_state())
+                state.extend(Card.make_invalid().get_state())
         return state
 
     def determine_winner(self):
@@ -188,9 +188,9 @@ class Player:
         state = [self.score, self.guessed_tricks]
         for i in range(game.last_round):
             try:
-                state.append(self.cards[i].get_state())
+                state.extend(self.cards[i].get_state())
             except IndexError:
-                state.append(Card.make_invalid().get_state())
+                state.extend(Card.make_invalid().get_state())
         return state
 
 class Game:

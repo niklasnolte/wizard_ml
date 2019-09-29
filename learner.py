@@ -7,7 +7,7 @@ from keras.optimizers import Adam
 from rl.agents.dqn import DQNAgent
 from rl.policy import BoltzmannQPolicy
 from rl.memory import SequentialMemory
-from env import Env
+from wizard_env import Env
 import gym
 
 env = Env()
@@ -16,7 +16,7 @@ np.random.seed(123)
 nb_actions = env.action_space.n
 
 model = Sequential()
-model.add(Flatten(input_shape=(1,5,2)))
+model.add(Flatten(input_shape=(1,16)))
 model.add(Dense(4, init='random_uniform', activation='relu'))
 # model.add(Dense(16, init='random_uniform', activation='relu'))
 model.add(Dense(nb_actions, init='random_uniform', activation='linear'))
@@ -25,7 +25,7 @@ print(model.summary())
 
 # Finally, we configure and compile our agent. You can use every built-in Keras optimizer and
 # even the metrics!
-memory = SequentialMemory(limit=10000, window_length=1)
+memory = SequentialMemory(limit=1000, window_length=1)
 args = {
     'model':               model,
     'nb_actions':          nb_actions,
@@ -39,9 +39,7 @@ args['nb_steps_warmup'] = max(30, args['batch_size'])
 dqn = DQNAgent(**args)
 dqn.compile(Adam(lr=1e-3), metrics=['mae'])
 
-# Okay, now it's time to learn something! We visualize the training here for show, but this
-# slows down training quite a lot. You can always safely abort the training prematurely using
-# Ctrl + C.
+# fitting step
 dqn.fit(env, nb_steps=500000, visualize=False, verbose=2)
 
 # After training is done, we save the final weights.
