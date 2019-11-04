@@ -6,20 +6,22 @@ import numpy as np
 from main_simple import Card, Game
 import multiprocessing
 import matplotlib.pyplot as plt
+import random
 
 def _print(*args, **kwargs):
-    # return
-    return print(*args, **kwargs)
+    # return print(*args, **kwargs)
+    return
 
 class Env(gym.Env):
 
-    def __init__(self, average_over = 50):
+    def __init__(self, average_over = 50, visualize = False):
         # 0 = white
         # 1 = red
         # 2 = blue
         # 3 = green
         # 4 = yellow
         # -1 - 14 = values (-1 = no card there)
+        self.visualize = visualize
         cards_space = spaces.Box(low = np.array([0,-1]), high = np.array([4,14]))
         score_space = spaces.Box(low = np.array([0]), high = np.array([100]))
         # TODO make player space to abstract further
@@ -45,6 +47,7 @@ class Env(gym.Env):
         self.action_space = spaces.Discrete(3)
 
         self.scores = []
+        self.last_score = 0
 
         self.average_over = average_over
         self.fig, self.ax = plt.subplots()
@@ -79,8 +82,9 @@ class Env(gym.Env):
         self.fig.canvas.draw()
 
     def seed(self, seed=None): # TODO NOOP for now
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
+        return 42
+        # self.np_random, seed = seeding.np_random(seed)
+        # return [seed]
 
     def recv_state(self):
         state = self.my_pipe_end.recv()
@@ -109,12 +113,11 @@ class Env(gym.Env):
         return self.observation, reward, self.game_done, {}
 
     def reset(self):
-        self.scores.append(self.last_score)
-        self.replot()
-
+        if self.visualize:
+            self.scores.append(self.last_score)
+            self.replot()
         self.my_pipe_end, other_pipe_end = multiprocessing.Pipe()
-        self.game_process = multiprocessing.Process(target = Game(2, [0], other_pipe_end).play)
-        self.game_process.start()
+        multiprocessing.Process(target = Game(2, [0], other_pipe_end, print_function = _print).play).start()
         self.recv_state()
         self.last_score = 0
         self.last_observation = 0

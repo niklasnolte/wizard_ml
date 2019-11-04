@@ -4,13 +4,8 @@ import random
 import click
 import numpy as np
 
-random.seed(42)
 
 trump = None
-
-def _print(*args, **kwargs):
-    # return
-    return print(*args, **kwargs)
 
 
 def rotate(l, n):
@@ -25,11 +20,14 @@ class Card:
     invalid_color = 'INVALID'
     color_code_map = {y:x for x,y in enumerate([invalid_color, white, red, blue, green, yellow])}
 
-    normal_colors = (red, blue, green, yellow)
+    normal_colors = (red,)# blue, green, yellow)
     normal_values = list(range(1, 14))
     joker_color = wizard_color = white
     joker_value = 0
     wizard_value = 14
+
+    def is_special(self):
+        return self.color == 'white'
 
     @classmethod
     def make_invalid(cls):
@@ -70,10 +68,8 @@ class Card:
             return False
         elif self.is_wizard():
             return True;
-        elif self.is_joker() and not other.is_joker:
+        elif self.is_joker():
             return False
-        elif other.is_joker():
-            return True
         elif other.is_trump() and not self.is_trump():
             return False
         elif self.is_trump() and not other.is_trump():
@@ -101,7 +97,9 @@ class CardStack:
         """
         shuffle the card deck
         """
-        #random.shuffle(self.deck)
+        # random.seed(43)
+        random.seed(45)
+        random.shuffle(self.deck)
 
     def draw(self):
         return self.deck.pop(-1)
@@ -137,7 +135,6 @@ class Trick:
 
     def determine_winner(self):
         winner = 0
-        color_to_be_played = self.color_to_serve()
         for i,card in enumerate(self.cards):
             if card > self.cards[winner]:
                 winner = i
@@ -162,7 +159,7 @@ class Player:
             else:
                 index = game.prompt("Pick index of card to play", type=int)
             try:
-                if color_to_serve and \
+                if color_to_serve and not self.cards[index].is_special() and \
                    self.cards[index].color != color_to_serve and \
                    color_to_serve in [card.color for card in self.cards]:
                     raise IndexError(f"please serve {color_to_serve}")
@@ -200,17 +197,17 @@ class Player:
         return state
 
 class Game:
-    def __init__(self, nplayers, random_idxs=[0], pipe = None):
+    def __init__(self, nplayers, random_idxs=[0], pipe = None, print_function = print):
         # if there is a pipe, we'll be getting instructions from somewhere else
         self.nplayers = nplayers
         self.last_round = 2
         self.players = [Player(i, i in random_idxs) for i in range(nplayers)]
-        cards = CardStack()
-        cards.shuffle()
         self.current_trick = Trick()
         self.pipe = pipe
         self.round_finished = False
         self.game_over = False
+        global _print
+        _print = print_function
 
     def play(self):
         _print("Lets go!")
@@ -260,10 +257,9 @@ class Game:
         self.round_finished = False # new round begins
 
         winner_idx = 0 # not really, only the guy who starts
-        players = list(self.players) # this list will be rotated to change the starting player
         for _ in range(Round): #there are #rounds cards per player
             self.current_trick = Trick()
-            players = rotate(players, winner_idx)
+            players = rotate(self.players, winner_idx)
             for p in players:
                 p.show_cards_with_index()
                 color_to_serve = self.current_trick.color_to_serve();
