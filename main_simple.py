@@ -128,9 +128,9 @@ class Trick:
         state = []
         for i in range(game.last_round):
             try:
-                state.extend(self.cards[i].get_state())
+                state.append(self.cards[i].get_state())
             except IndexError:
-                state.extend(Card.make_invalid().get_state())
+                state.append(Card.make_invalid().get_state())
         return state
 
     def determine_winner(self):
@@ -191,9 +191,9 @@ class Player:
         state = [self.score, self.guessed_tricks]
         for i in range(game.last_round):
             try:
-                state.extend(self.cards[i].get_state())
+                state.append(self.cards[i].get_state())
             except IndexError:
-                state.extend(Card.make_invalid().get_state())
+                state.append(Card.make_invalid().get_state())
         return state
 
 class Game:
@@ -288,6 +288,7 @@ class Game:
         for p in rotate(self.players, rotate_idx):
             state.extend(p.get_state(self))
         state.extend(self.current_trick.get_state(self))
+        # state = state[:2]
         state.append(self.round_finished)
         state.append(self.game_over)
         return state
@@ -303,6 +304,10 @@ class Game:
             self.pipe.send(self.get_state(**kwargs))
             _print(msg)
             next_action = self.pipe.recv()
+            try:
+                next_action = next_action[0]
+            except TypeError:
+                pass
             _print(f"action: {next_action}")
             return next_action
 
