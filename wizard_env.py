@@ -138,10 +138,13 @@ class Env(py_environment.PyEnvironment):
 
         def calculate_reward():
             nothing_changed=True
-            for new,old in zip(self._state.values(), self.last_state.values()):
-                if any(new != old):
-                    nothing_changed=False
-                    break
+            if len(self._state.values()) != len(self.last_state.values()):
+                nothing_changed=False
+            else:
+                for new,old in zip(self._state.values(), self.last_state.values()):
+                    if any(new != old):
+                        nothing_changed=False
+                        break
 
             self.last_state = self._state
             if self.round_done or self.game_done:
