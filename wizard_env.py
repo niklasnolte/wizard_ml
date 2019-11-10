@@ -12,14 +12,10 @@ from tf_agents.trajectories import time_step as ts
 
 from collections.abc import Iterable
 
-
-def _print(*args, **kwargs):
-    return print(*args, **kwargs)
-    # return
-
-
 class Env(py_environment.PyEnvironment):
-    def __init__(self, average_over=50, visualize=False):
+    def __init__(self, average_over=50, visualize=False, print_f = print):
+        global _print
+        _print = print_f
         # 0 = white
         # 1 = red
         # 2 = blue
@@ -61,9 +57,9 @@ class Env(py_environment.PyEnvironment):
             cards_spec,
         ]
 
-        self._observation_spec = {
-            i: j(i) for i, j in zip(self.observation_keys, self.observation_specs)
-        }
+        self._observation_spec = [
+            j(i) for i, j in zip(self.observation_keys, self.observation_specs)
+        ]
 
         self._state = 0
         self.game_done = False
@@ -117,15 +113,12 @@ class Env(py_environment.PyEnvironment):
 
     def recv_state(self):
         state = self.my_pipe_end.recv()
-        observation_states = [
+        self._state = [
             np.array(value, dtype=np.int32)
             if isinstance(value, Iterable)
             else np.array([value], dtype=np.int32)
             for value in state[:-2]
         ]
-        self._state = {
-            key: value for key, value in zip(self.observation_keys, observation_states)
-        }
         self.round_done = state[-2]
         self.game_done = state[-1]
 
@@ -138,10 +131,10 @@ class Env(py_environment.PyEnvironment):
 
         def calculate_reward():
             nothing_changed=True
-            if len(self._state.values()) != len(self.last_state.values()):
+            if len(self._state) != len(self.last_state):
                 nothing_changed=False
             else:
-                for new,old in zip(self._state.values(), self.last_state.values()):
+                for new,old in zip(self._state, self.last_state):
                     if any(new != old):
                         nothing_changed=False
                         break
@@ -149,7 +142,7 @@ class Env(py_environment.PyEnvironment):
             self.last_state = self._state
             if self.round_done or self.game_done:
                 # my score - opponents score
-                reward = float(self._state['my_score'][0])# - self._state[0]# - self.last_scores #TODO maybe but it back in
+                reward = float(self._state[4][0])# - self._state[0]# - self.last_scores #TODO maybe but it back in
                 self.last_score = reward
                 return reward
             else:
@@ -164,7 +157,7 @@ class Env(py_environment.PyEnvironment):
 
     def _reset(self):
         self.game_done = False
-        self._state = dict()
+        self._state = list()
         if self.visualize:
             self.scores.append(self.last_score)
             self.replot()
@@ -174,12 +167,11 @@ class Env(py_environment.PyEnvironment):
         ).start()
         self.recv_state()
         self.last_score = 0
-        self.last_state = dict()
+        self.last_state = list()
         self.round_done = False
         self.game_done = False
         return ts.restart(self._state)
 
-
-from tf_agents.environments.utils import validate_py_environment
-
-validate_py_environment(Env(), episodes=3)
+if __name__ == "__main__":
+    from tf_agents.environments.utils import validate_py_environment
+    validate_py_environment(Env(print_f = lambda *args, **kwargs: None), episodes=3)

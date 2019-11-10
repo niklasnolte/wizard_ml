@@ -311,5 +311,6 @@ class Game:
             _print(f"action: {next_action}")
             return next_action
 
-# g = Game(click.prompt("Number of players?", type = int))
-# g.play()
+if __name__ == "__main__":
+    g = Game(click.prompt("Number of players?", type = int))
+    g.play()
