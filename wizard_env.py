@@ -13,9 +13,9 @@ from tf_agents.trajectories import time_step as ts
 from collections.abc import Iterable
 
 class Env(py_environment.PyEnvironment):
-    def __init__(self, average_over=50, visualize=False, print_f = print):
+    def __init__(self, average_over=50, visualize=False, with_print = True):
         global _print
-        _print = print_f
+        _print = print if with_print else (lambda *args, **kwargs : None)
         # 0 = white
         # 1 = red
         # 2 = blue
@@ -31,35 +31,18 @@ class Env(py_environment.PyEnvironment):
         )
         # TODO make player space to abstract further
 
-        self.observation_keys = (
-            "enemy_score",
-            "enemy_trick_guess",
-            "enemy_first_card",
-            "enemy_second_card",
-            "my_score",
-            "my_trick_guess",
-            "my_first_card",
-            "my_second_card",
-            "first_in_trick",
-            "second_in_trick",
+        self._observation_spec = (
+            score_spec("enemy_score"),
+            score_spec("enemy_trick_guess"),
+            cards_spec("enemy_first_card"),
+            cards_spec("enemy_second_card"),
+            score_spec("my_score"),
+            score_spec("my_trick_guess"),
+            cards_spec("my_first_card"),
+            cards_spec("my_second_card"),
+            cards_spec("first_in_trick"),
+            cards_spec("second_in_trick"),
         )
-
-        self.observation_specs = [
-            score_spec,
-            score_spec,
-            cards_spec,
-            cards_spec,
-            score_spec,
-            score_spec,
-            cards_spec,
-            cards_spec,
-            cards_spec,
-            cards_spec,
-        ]
-
-        self._observation_spec = [
-            j(i) for i, j in zip(self.observation_keys, self.observation_specs)
-        ]
 
         self._state = 0
         self.game_done = False
@@ -84,6 +67,8 @@ class Env(py_environment.PyEnvironment):
             self.ax.legend(loc="best", ncol=2)
             self.lasttile = 1
             plt.show(block=False)
+
+        self.reset()
 
     def action_spec(self):
         return self._action_spec
@@ -113,18 +98,19 @@ class Env(py_environment.PyEnvironment):
 
     def recv_state(self):
         state = self.my_pipe_end.recv()
-        self._state = [
+        self._state = tuple(
             np.array(value, dtype=np.int32)
             if isinstance(value, Iterable)
             else np.array([value], dtype=np.int32)
             for value in state[:-2]
-        ]
+        )
         self.round_done = state[-2]
         self.game_done = state[-1]
 
     def _step(self, action):
         if self.game_done:
-            return self._reset()
+            _print("new game!")
+            return self.reset()
         self.my_pipe_end.send(action)
         self.recv_state()
         _print(f"recieved state {self._state}")
@@ -142,7 +128,7 @@ class Env(py_environment.PyEnvironment):
             self.last_state = self._state
             if self.round_done or self.game_done:
                 # my score - opponents score
-                reward = float(self._state[4][0])# - self._state[0]# - self.last_scores #TODO maybe but it back in
+                reward = float(self._state[4][0])
                 self.last_score = reward
                 return reward
             else:
@@ -153,11 +139,11 @@ class Env(py_environment.PyEnvironment):
         if self.game_done:
             return ts.termination(self._state, reward)
         else:
-            return ts.transition(self._state, reward, discount=1.0)  # TODO discount?
+            return ts.transition(self._state, reward, discount=0.9)  # TODO discount?
 
     def _reset(self):
         self.game_done = False
-        self._state = list()
+        self._state = tuple()
         if self.visualize:
             self.scores.append(self.last_score)
             self.replot()
@@ -167,11 +153,11 @@ class Env(py_environment.PyEnvironment):
         ).start()
         self.recv_state()
         self.last_score = 0
-        self.last_state = list()
+        self.last_state = tuple()
         self.round_done = False
         self.game_done = False
         return ts.restart(self._state)
 
 if __name__ == "__main__":
     from tf_agents.environments.utils import validate_py_environment
-    validate_py_environment(Env(print_f = lambda *args, **kwargs: None), episodes=3)
+    validate_py_environment(Env(with_print = False), episodes=5)

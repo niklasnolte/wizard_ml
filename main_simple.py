@@ -67,7 +67,7 @@ class Card:
         if other.is_wizard():
             return False
         elif self.is_wizard():
-            return True;
+            return True
         elif self.is_joker():
             return False
         elif other.is_trump() and not self.is_trump():
@@ -262,7 +262,7 @@ class Game:
             players = rotate(self.players, winner_idx)
             for p in players:
                 p.show_cards_with_index()
-                color_to_serve = self.current_trick.color_to_serve();
+                color_to_serve = self.current_trick.color_to_serve()
                 self.current_trick.add(p.play_card(self, color_to_serve))
                 _print(f"\nCurrent trick: {self.current_trick}\n")
             winner_idx = self.current_trick.determine_winner()
