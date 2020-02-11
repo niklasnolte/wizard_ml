@@ -1,36 +1,44 @@
-import numpy as np
 from time import sleep
 
-from wizard_env import Env
-
+import numpy as np
 import tensorflow as tf
-
+from tf_agents.agents.dqn import dqn_agent
 from tf_agents.environments import tf_py_environment
 from tf_agents.networks import q_network
+from tf_agents.policies import random_tf_policy
+from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.trajectories import trajectory
 from tf_agents.utils import common
 
-num_eval_episodes = 100
+from wizard_env import Env
 
-env = tf_py_environment.TFPyEnvironment(Env(with_print=False))
+num_eval_episodes = 1
 
-concat_layer = tf.keras.layers.Lambda(lambda x:tf.keras.layers.Concatenate()(list(x)))
+env = tf_py_environment.TFPyEnvironment(Env(with_print=True))
+
+
+def concat_fun(x):
+    return tf.keras.layers.Concatenate()(list(x))
+
+
+concat_layer = tf.keras.layers.Lambda(concat_fun)
+
 
 q_net = q_network.QNetwork(
-    env.observation_spec(),
-    env.action_spec(),
-    preprocessing_combiner=concat_layer
+    env.observation_spec()['state'], env.action_spec(), preprocessing_combiner=concat_layer
 )
-
-
 
 
 optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=1e-1)
 
+
 train_step_counter = tf.Variable(0)
 
-from tf_agents.agents.dqn import dqn_agent
-from tf_agents.utils import common
+
+def split_observation_and_constraint(obs):
+    print(obs)
+    return obs["state"], obs["constraint"]
+
 
 agent = dqn_agent.DqnAgent(
     env.time_step_spec(),
@@ -38,12 +46,12 @@ agent = dqn_agent.DqnAgent(
     q_network=q_net,
     optimizer=optimizer,
     td_errors_loss_fn=common.element_wise_squared_loss,
+    observation_and_action_constraint_splitter=split_observation_and_constraint,
     train_step_counter=train_step_counter,
 )
 
 agent.initialize()
 
-from tf_agents.policies import random_tf_policy
 
 random_policy = random_tf_policy.RandomTFPolicy(env.time_step_spec(), env.action_spec())
 
@@ -64,7 +72,6 @@ def compute_avrg_return(environment, policy, num_episodes=10):
     avg_return = total_return / num_episodes
     return avg_return.numpy()[0]
 
-from tf_agents.replay_buffers import tf_uniform_replay_buffer
 
 replay_buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(
     data_spec=agent.collect_data_spec, batch_size=env.batch_size, max_length=1000
@@ -83,18 +90,18 @@ def collect_data(env, policy, buf, steps):
     for _ in range(steps):
         collect_step(env, policy, buf)
 
-# collect_data(env, random_policy, replay_buffer, steps=100)
+
+collect_data(env, random_policy, replay_buffer, steps=2)
 
 dataset = replay_buffer.as_dataset(
-    num_parallel_calls=3, sample_batch_size=64, num_steps=2
-).prefetch(3)
+    num_parallel_calls=1, sample_batch_size=1, num_steps=2
+)
 
 it = iter(dataset)
 
 agent.train = common.function(agent.train)
 
 agent.train_step_counter.assign(0)
-
 
 avg_return = compute_avrg_return(env, agent.policy, num_eval_episodes)
 returns = [avg_return]

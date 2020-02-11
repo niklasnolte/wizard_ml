@@ -11,23 +11,26 @@ trump = None
 def rotate(l, n):
     return l[n:] + l[:n]
 
-class Card:
-    white = 'white'
-    red = 'red'
-    blue = 'blue'
-    green = 'green'
-    yellow = 'yellow'
-    invalid_color = 'INVALID'
-    color_code_map = {y:x for x,y in enumerate([invalid_color, white, red, blue, green, yellow])}
 
-    normal_colors = (red,)# blue, green, yellow)
+class Card:
+    white = "white"
+    red = "red"
+    blue = "blue"
+    green = "green"
+    yellow = "yellow"
+    invalid_color = "INVALID"
+    color_code_map = {
+        y: x for x, y in enumerate([invalid_color, white, red, blue, green, yellow])
+    }
+
+    normal_colors = (red,)  # blue, green, yellow)
     normal_values = list(range(1, 14))
     joker_color = wizard_color = white
     joker_value = 0
     wizard_value = 14
 
     def is_special(self):
-        return self.color == 'white'
+        return self.color == "white"
 
     @classmethod
     def make_invalid(cls):
@@ -41,7 +44,7 @@ class Card:
         defining a wizard card
         """
         if value in (self.joker_value, self.wizard_value):
-            assert(color == self.joker_color)
+            assert color == self.joker_color
         self.color = color
         self.value = value
 
@@ -82,10 +85,16 @@ class Card:
     def get_state(self):
         return (self.colorcode, self.value)
 
+
 class CardStack:
-    all_cards = [Card(color, value) for value, color in
-                 list(itertools.product(Card.normal_values, Card.normal_colors)) +
-                 4*[(Card.joker_value, Card.joker_color), (Card.wizard_value, Card.wizard_color)] ]
+    all_cards = [
+        Card(color, value)
+        for value, color in list(
+            itertools.product(Card.normal_values, Card.normal_colors)
+        )
+        + 4
+        * [(Card.joker_value, Card.joker_color), (Card.wizard_value, Card.wizard_color)]
+    ]
 
     def __init__(self):
         """
@@ -103,6 +112,7 @@ class CardStack:
 
     def draw(self):
         return self.deck.pop(-1)
+
 
 class Trick:
     def __init__(self):
@@ -135,13 +145,16 @@ class Trick:
 
     def determine_winner(self):
         winner = 0
-        for i,card in enumerate(self.cards):
+        for i, card in enumerate(self.cards):
             if card > self.cards[winner]:
                 winner = i
         return winner
 
+
 class Player:
-    def __init__(self, number, random=False): #implement a random player to play against the AI
+    def __init__(
+        self, number, random=False
+    ):  # implement a random player to play against the AI
         self.n = number
         self.score = 0
         self.cards = []
@@ -159,9 +172,12 @@ class Player:
             else:
                 index = game.prompt("Pick index of card to play", type=int)
             try:
-                if color_to_serve and not self.cards[index].is_special() and \
-                   self.cards[index].color != color_to_serve and \
-                   color_to_serve in [card.color for card in self.cards]:
+                if (
+                    color_to_serve
+                    and not self.cards[index].is_special()
+                    and self.cards[index].color != color_to_serve
+                    and color_to_serve in [card.color for card in self.cards]
+                ):
                     raise IndexError(f"please serve {color_to_serve}")
                 return self.cards.pop(index)
             except IndexError:
@@ -177,7 +193,9 @@ class Player:
         if self.random:
             self.guessed_tricks = random.choice(list(range(len(self.cards))))
         else:
-            self.guessed_tricks = game.prompt(f"Player {self.n}, how many tricks will you get?", type=int)
+            self.guessed_tricks = game.prompt(
+                f"Player {self.n}, how many tricks will you get?", type=int
+            )
         _print(f"Player {self.n} called {self.guessed_tricks} tricks!\n")
 
     def reset_tricks(self):
@@ -187,21 +205,27 @@ class Player:
     def __repr__(self):
         return f"Player(n={self.n},score={self.score})"
 
-    def get_state(self, game):
+    def get_state_and_choice_mask(self, game):
         state = [self.score, self.guessed_tricks]
+        choice_mask = []
         for i in range(game.last_round):
             try:
                 state.append(self.cards[i].get_state())
+                choice_mask.append(1)
             except IndexError:
                 state.append(Card.make_invalid().get_state())
-        return state
+                choice_mask.append(0)
+        choice_mask.append(0)
+        return state, choice_mask
+
 
 class Game:
-    def __init__(self, nplayers, random_idxs=[0], pipe = None, print_function = print):
+    def __init__(self, nplayers, random_idxs=[0], pipe=None, print_function=print):
         # if there is a pipe, we'll be getting instructions from somewhere else
         self.nplayers = nplayers
         self.last_round = 2
         self.players = [Player(i, i in random_idxs) for i in range(nplayers)]
+        self._random_idxs = random_idxs
         self.current_trick = Trick()
         self.pipe = pipe
         self.round_finished = False
@@ -212,18 +236,17 @@ class Game:
     def play(self):
         _print("Lets go!")
 
-        for r in range(1,self.last_round):
-            self.play_round(r+1)
-            _print("Scores after round {}:\n".format(r+1))
+        for r in range(1, self.last_round):
+            self.play_round(r + 1)
+            _print("Scores after round {}:\n".format(r + 1))
             for p in self.players:
                 _print(f"Player {p.n}: {p.score}")
                 p.reset_tricks()
             _print("")
-            self.players = rotate(self.players, 1) # the next one starts
-
+            self.players = rotate(self.players, 1)  # the next one starts
 
         winner = 0
-        score = -1000 #small number
+        score = -1000  # small number
         for p in self.players:
             if p.score > score:
                 winner = p.n
@@ -238,11 +261,11 @@ class Game:
         if guess == count:
             return 2 + guess
         else:
-            return -1*abs(guess-count)
+            return -1 * abs(guess - count)
 
     def play_round(self, Round):
         global trump
-        trump = None#random.choice(Card.normal_colors + (None,))
+        trump = None  # random.choice(Card.normal_colors + (None,))
         _print(f"\nTRUMP FOR THIS ROUND: {trump}")
         _print(f"\n\nStarting round {Round}\n")
         cards = CardStack()
@@ -254,10 +277,10 @@ class Game:
         for p in self.players:
             p.show_cards_with_index()
             p.guess_tricks(self)
-        self.round_finished = False # new round begins
+        self.round_finished = False  # new round begins
 
-        winner_idx = 0 # not really, only the guy who starts
-        for _ in range(Round): #there are #rounds cards per player
+        winner_idx = 0  # not really, only the guy who starts
+        for _ in range(Round):  # there are #rounds cards per player
             self.current_trick = Trick()
             players = rotate(self.players, winner_idx)
             for p in players:
@@ -270,28 +293,32 @@ class Game:
             winner.trick_count += 1
             _print(f"Player {winner.n} won this trick.\n\n")
             for p in players:
-                _print(f"Player {p.n}, you now have {p.trick_count} tricks, and you need {p.guessed_tricks}")
+                _print(
+                    f"Player {p.n}, you now have {p.trick_count} tricks, and you need {p.guessed_tricks}"
+                )
             _print("")
             _print(f"\nState: {self.get_state()}\n")
 
         for p in self.players:
             p.score += self.determine_score(p.guessed_tricks, p.trick_count)
-        self.round_finished = True # round ends
+        self.round_finished = True  # round ends
 
-
-    def get_state(self):
-        state = []
+    def get_state_and_choice_mask(self):
+        game_state = []
         rotate_idx = 0
-        for i,p in enumerate(self.players):
+        for i, p in enumerate(self.players):
             if p.n == 0:
                 rotate_idx = i
         for p in rotate(self.players, rotate_idx):
-            state.extend(p.get_state(self))
-        state.extend(self.current_trick.get_state(self))
-        # state = state[:2]
-        state.append(self.round_finished)
-        state.append(self.game_over)
-        return state
+            state, choice_mask = p.get_state_and_choice_mask(self)
+            game_state.extend(state)
+            if p.n not in self._random_idxs:
+                player_choice_mask = choice_mask
+        game_state.extend(self.current_trick.get_state(self))
+        # game_state = state[:2]
+        game_state.append(self.round_finished)
+        game_state.append(self.game_over)
+        return {"state" : game_state, "mask" : player_choice_mask}
 
     def prompt(self, msg, type=int, **kwargs):
         if not self.pipe:
@@ -301,7 +328,7 @@ class Game:
                 except TypeError:
                     _print("please give a valid input")
         else:
-            self.pipe.send(self.get_state(**kwargs))
+            self.pipe.send(self.get_state_and_choice_mask(**kwargs))
             _print(msg)
             next_action = self.pipe.recv()
             try:
@@ -311,6 +338,7 @@ class Game:
             _print(f"action: {next_action}")
             return next_action
 
+
 if __name__ == "__main__":
-    g = Game(click.prompt("Number of players?", type = int))
+    g = Game(click.prompt("Number of players?", type=int))
     g.play()

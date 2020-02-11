@@ -12,10 +12,11 @@ from tf_agents.trajectories import time_step as ts
 
 from collections.abc import Iterable
 
+
 class Env(py_environment.PyEnvironment):
-    def __init__(self, average_over=50, visualize=False, with_print = True):
+    def __init__(self, average_over=50, visualize=False, with_print=True):
         global _print
-        _print = print if with_print else (lambda *args, **kwargs : None)
+        _print = print if with_print else (lambda *args, **kwargs: None)
         # 0 = white
         # 1 = red
         # 2 = blue
@@ -31,25 +32,34 @@ class Env(py_environment.PyEnvironment):
         )
         # TODO make player space to abstract further
 
-        self._observation_spec = (
-            score_spec("enemy_score"),
-            score_spec("enemy_trick_guess"),
-            cards_spec("enemy_first_card"),
-            cards_spec("enemy_second_card"),
-            score_spec("my_score"),
-            score_spec("my_trick_guess"),
-            cards_spec("my_first_card"),
-            cards_spec("my_second_card"),
-            cards_spec("first_in_trick"),
-            cards_spec("second_in_trick"),
-        )
-
-        self._state = 0
+        self._state = dict()
         self.game_done = False
 
         self._action_spec = array_spec.BoundedArraySpec(
             shape=(1,), minimum=0, maximum=2, name="action", dtype=np.int32
         )
+
+        n_actions = self._action_spec._maximum - self._action_spec._minimum + 1
+
+        self._action_mask_spec = array_spec.BoundedArraySpec(
+            shape=(n_actions,), minimum=0, maximum=1, dtype=np.int32
+        )
+
+        self._observation_spec = {
+            "state": (
+                score_spec("enemy_score"),
+                score_spec("enemy_trick_guess"),
+                cards_spec("enemy_first_card"),
+                cards_spec("enemy_second_card"),
+                score_spec("my_score"),
+                score_spec("my_trick_guess"),
+                cards_spec("my_first_card"),
+                cards_spec("my_second_card"),
+                cards_spec("first_in_trick"),
+                cards_spec("second_in_trick"),
+            ),
+            "constraint": self._action_mask_spec,
+        }
 
         self.last_score = 0
 
@@ -97,15 +107,19 @@ class Env(py_environment.PyEnvironment):
         self.fig.canvas.draw()
 
     def recv_state(self):
-        state = self.my_pipe_end.recv()
-        self._state = tuple(
-            np.array(value, dtype=np.int32)
-            if isinstance(value, Iterable)
-            else np.array([value], dtype=np.int32)
-            for value in state[:-2]
+        game_state = self.my_pipe_end.recv()
+        self._state = dict(
+            state=tuple(
+                np.array(value, dtype=np.int32)
+                if isinstance(value, Iterable)
+                else np.array([value], dtype=np.int32)
+                for value in game_state['state'][:-2]
+            ),
+            constraint=np.array(game_state['mask'], dtype=np.int32),
         )
-        self.round_done = state[-2]
-        self.game_done = state[-1]
+        print(self._state['constraint'])
+        self.round_done = game_state['state'][-2]
+        self.game_done = game_state['state'][-1]
 
     def _step(self, action):
         if self.game_done:
@@ -116,19 +130,19 @@ class Env(py_environment.PyEnvironment):
         _print(f"recieved state {self._state}")
 
         def calculate_reward():
-            nothing_changed=True
+            nothing_changed = True
             if len(self._state) != len(self.last_state):
-                nothing_changed=False
+                nothing_changed = False
             else:
-                for new,old in zip(self._state, self.last_state):
-                    if any(new != old):
-                        nothing_changed=False
+                for new, old in zip(self._state, self.last_state):
+                    if new != old:
+                        nothing_changed = False
                         break
 
             self.last_state = self._state
             if self.round_done or self.game_done:
                 # my score - opponents score
-                reward = float(self._state[4][0])
+                reward = float(self._state['state'][4][0])
                 self.last_score = reward
                 return reward
             else:
@@ -143,7 +157,7 @@ class Env(py_environment.PyEnvironment):
 
     def _reset(self):
         self.game_done = False
-        self._state = tuple()
+        self._state = dict()
         if self.visualize:
             self.scores.append(self.last_score)
             self.replot()
@@ -153,11 +167,15 @@ class Env(py_environment.PyEnvironment):
         ).start()
         self.recv_state()
         self.last_score = 0
-        self.last_state = tuple()
+        self.last_state = dict()
         self.round_done = False
         self.game_done = False
         return ts.restart(self._state)
 
+
 if __name__ == "__main__":
     from tf_agents.environments.utils import validate_py_environment
-    validate_py_environment(Env(with_print = False), episodes=5)
+
+    myEnv = Env(with_print=True)
+    print(myEnv.time_step_spec())
+    validate_py_environment(myEnv, episodes=5)
