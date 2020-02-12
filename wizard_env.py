@@ -117,7 +117,6 @@ class Env(py_environment.PyEnvironment):
             ),
             constraint=np.array(game_state['mask'], dtype=np.int32),
         )
-        print(self._state['constraint'])
         self.round_done = game_state['state'][-2]
         self.game_done = game_state['state'][-1]
 
@@ -130,23 +129,14 @@ class Env(py_environment.PyEnvironment):
         _print(f"recieved state {self._state}")
 
         def calculate_reward():
-            nothing_changed = True
-            if len(self._state) != len(self.last_state):
-                nothing_changed = False
-            else:
-                for new, old in zip(self._state, self.last_state):
-                    if new != old:
-                        nothing_changed = False
-                        break
-
             self.last_state = self._state
             if self.round_done or self.game_done:
-                # my score - opponents score
+                # my score is the reward
                 reward = float(self._state['state'][4][0])
                 self.last_score = reward
                 return reward
             else:
-                return -1 * nothing_changed
+                return 0
 
         reward = calculate_reward() * 1.0
         _print("reward: ", reward)
@@ -177,5 +167,4 @@ if __name__ == "__main__":
     from tf_agents.environments.utils import validate_py_environment
 
     myEnv = Env(with_print=True)
-    print(myEnv.time_step_spec())
     validate_py_environment(myEnv, episodes=5)

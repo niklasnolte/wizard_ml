@@ -254,7 +254,7 @@ class Game:
         _print(f"Congratz to Player {winner}, who won with a score of {score}")
         if self.pipe:
             self.game_over = True
-            self.pipe.send(self.get_state())
+            self.pipe.send(self.get_state_and_choice_mask())
 
     @staticmethod
     def determine_score(guess, count):
@@ -297,7 +297,7 @@ class Game:
                     f"Player {p.n}, you now have {p.trick_count} tricks, and you need {p.guessed_tricks}"
                 )
             _print("")
-            _print(f"\nState: {self.get_state()}\n")
+            _print(f"\nState: {self.get_state_and_choice_mask()}\n")
 
         for p in self.players:
             p.score += self.determine_score(p.guessed_tricks, p.trick_count)
@@ -315,20 +315,20 @@ class Game:
             if p.n not in self._random_idxs:
                 player_choice_mask = choice_mask
         game_state.extend(self.current_trick.get_state(self))
-        # game_state = state[:2]
         game_state.append(self.round_finished)
         game_state.append(self.game_over)
         return {"state" : game_state, "mask" : player_choice_mask}
 
-    def prompt(self, msg, type=int, **kwargs):
+    def prompt(self, msg, type=int):
         if not self.pipe:
+            _print(self.get_state_and_choice_mask())
             while True:
                 try:
                     return type(click.prompt(msg, type))
                 except TypeError:
                     _print("please give a valid input")
         else:
-            self.pipe.send(self.get_state_and_choice_mask(**kwargs))
+            self.pipe.send(self.get_state_and_choice_mask())
             _print(msg)
             next_action = self.pipe.recv()
             try:

@@ -12,31 +12,24 @@ from tf_agents.utils import common
 
 from wizard_env import Env
 
-num_eval_episodes = 1
+num_eval_episodes = 20
 
-env = tf_py_environment.TFPyEnvironment(Env(with_print=True))
+env = tf_py_environment.TFPyEnvironment(Env(with_print=False))
 
-
-def concat_fun(x):
-    return tf.keras.layers.Concatenate()(list(x))
-
-
-concat_layer = tf.keras.layers.Lambda(concat_fun)
-
+concat_layer = tf.keras.layers.Lambda(lambda x: tf.keras.layers.Concatenate()(list(x)))
 
 q_net = q_network.QNetwork(
     env.observation_spec()['state'], env.action_spec(), preprocessing_combiner=concat_layer
 )
 
 
-optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=1e-1)
+optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=5e-3)
 
 
 train_step_counter = tf.Variable(0)
 
 
 def split_observation_and_constraint(obs):
-    print(obs)
     return obs["state"], obs["constraint"]
 
 
@@ -80,6 +73,9 @@ replay_buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(
 
 def collect_step(env, policy, buf):
     ts = env.current_time_step()
+    if ts.is_last():
+        env.reset()
+    print(ts.observation['constraint'])
     action_step = policy.action(ts)
     next_ts = env.step(action_step.action)
     traj = trajectory.from_transition(ts, action_step, next_ts)
@@ -90,11 +86,11 @@ def collect_data(env, policy, buf, steps):
     for _ in range(steps):
         collect_step(env, policy, buf)
 
-
-collect_data(env, random_policy, replay_buffer, steps=2)
+#initial data collection
+collect_data(env, random_policy, replay_buffer, steps=num_eval_episodes)
 
 dataset = replay_buffer.as_dataset(
-    num_parallel_calls=1, sample_batch_size=1, num_steps=2
+    num_parallel_calls=1, sample_batch_size=3, num_steps=2
 )
 
 it = iter(dataset)
@@ -106,16 +102,18 @@ agent.train_step_counter.assign(0)
 avg_return = compute_avrg_return(env, agent.policy, num_eval_episodes)
 returns = [avg_return]
 
-for _ in range(10000):
+num_iterations = 500
+
+for _ in range(num_iterations):
     collect_step(env, agent.collect_policy, replay_buffer)
 
     experience, _ = next(it)
     train_loss = agent.train(experience).loss
     step = agent.train_step_counter.numpy()
 
-    if step % 1 == 0:
+    if step % 5 == 0:
         print("step = {0}: loss = {1}".format(step, train_loss))
-    if step % 1 == 0:
-        avg_return = compute_avrg_return(env, agent.policy, num_eval_episodes)
+    if step % 20 == 0:
+        avg_return = compute_avrg_return(env, agent.policy, 1)
         print("step = {0}: Average Return = {1}".format(step, avg_return))
         returns.append(avg_return)
