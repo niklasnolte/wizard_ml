@@ -170,7 +170,7 @@ class Player:
             if self.random:
                 index = random.choice(list(range(len(self.cards))))
             else:
-                index = game.prompt("Pick index of card to play", type=int)
+                index = yield from game.prompt("Pick index of card to play", type=int)
             try:
                 if (
                     color_to_serve
@@ -193,7 +193,7 @@ class Player:
         if self.random:
             self.guessed_tricks = random.choice(list(range(len(self.cards))))
         else:
-            self.guessed_tricks = game.prompt(
+            self.guessed_tricks = yield from game.prompt(
                 f"Player {self.n}, how many tricks will you get?", type=int
             )
         _print(f"Player {self.n} called {self.guessed_tricks} tricks!\n")
@@ -220,14 +220,12 @@ class Player:
 
 
 class Game:
-    def __init__(self, nplayers, random_idxs=[0], pipe=None, print_function=print):
-        # if there is a pipe, we'll be getting instructions from somewhere else
+    def __init__(self, nplayers, random_idxs=[0], print_function=print):
         self.nplayers = nplayers
         self.last_round = 2
         self.players = [Player(i, i in random_idxs) for i in range(nplayers)]
         self._random_idxs = random_idxs
         self.current_trick = Trick()
-        self.pipe = pipe
         self.round_finished = False
         self.game_over = False
         global _print
@@ -237,7 +235,7 @@ class Game:
         _print("Lets go!")
 
         for r in range(1, self.last_round):
-            self.play_round(r + 1)
+            yield from self.play_round(r + 1)
             _print("Scores after round {}:\n".format(r + 1))
             for p in self.players:
                 _print(f"Player {p.n}: {p.score}")
@@ -252,9 +250,8 @@ class Game:
                 winner = p.n
                 score = p.score
         _print(f"Congratz to Player {winner}, who won with a score of {score}")
-        if self.pipe:
-            self.game_over = True
-            self.pipe.send(self.get_state_and_choice_mask())
+        self.game_over = True
+        yield self.get_state_and_choice_mask()
 
     @staticmethod
     def determine_score(guess, count):
@@ -274,9 +271,11 @@ class Game:
             for p in self.players:
                 p.recieve_card(cards.draw())
 
+        yield self.get_state_and_choice_mask()
+
         for p in self.players:
             p.show_cards_with_index()
-            p.guess_tricks(self)
+            yield from p.guess_tricks(self)
         self.round_finished = False  # new round begins
 
         winner_idx = 0  # not really, only the guy who starts
@@ -286,7 +285,8 @@ class Game:
             for p in players:
                 p.show_cards_with_index()
                 color_to_serve = self.current_trick.color_to_serve()
-                self.current_trick.add(p.play_card(self, color_to_serve))
+                card = yield from p.play_card(self, color_to_serve)
+                self.current_trick.add(card)
                 _print(f"\nCurrent trick: {self.current_trick}\n")
             winner_idx = self.current_trick.determine_winner()
             winner = players[winner_idx]
@@ -320,25 +320,17 @@ class Game:
         return {"state" : game_state, "mask" : player_choice_mask}
 
     def prompt(self, msg, type=int):
-        if not self.pipe:
-            _print(self.get_state_and_choice_mask())
-            while True:
-                try:
-                    return type(click.prompt(msg, type))
-                except TypeError:
-                    _print("please give a valid input")
-        else:
-            self.pipe.send(self.get_state_and_choice_mask())
-            _print(msg)
-            next_action = self.pipe.recv()
-            try:
-                next_action = next_action[0]
-            except TypeError:
-                pass
-            _print(f"action: {next_action}")
-            return next_action
+        _print(msg)
+        while True:
+            next_action = yield self.get_state_and_choice_mask()
+            if isinstance(next_action, type):
+                break
+            _print(f"please provide a valid input: {type}")
+        _print(f"action: {next_action}")
+        return next_action
 
 
 if __name__ == "__main__":
     g = Game(click.prompt("Number of players?", type=int))
-    g.play()
+    game = g.play()
+    next(game)

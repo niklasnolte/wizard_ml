@@ -106,8 +106,7 @@ class Env(py_environment.PyEnvironment):
         self.ax.set_ylim(-5, 5)
         self.fig.canvas.draw()
 
-    def recv_state(self):
-        game_state = self.my_pipe_end.recv()
+    def register_state(self, game_state):
         self._state = dict(
             state=tuple(
                 np.array(value, dtype=np.int32)
@@ -124,8 +123,8 @@ class Env(py_environment.PyEnvironment):
         if self.game_done:
             _print("new game!")
             return self.reset()
-        self.my_pipe_end.send(action)
-        self.recv_state()
+        next_state = self.game_com_channel.send(int(action))
+        self.register_state(next_state)
         _print(f"recieved state {self._state}")
 
         def calculate_reward():
@@ -151,11 +150,9 @@ class Env(py_environment.PyEnvironment):
         if self.visualize:
             self.scores.append(self.last_score)
             self.replot()
-        self.my_pipe_end, other_pipe_end = multiprocessing.Pipe()
-        multiprocessing.Process(
-            target=Game(2, [0], other_pipe_end, print_function=_print).play
-        ).start()
-        self.recv_state()
+        self.game_com_channel = Game(2, [0], print_function=_print).play()
+        initial_game_state = next(self.game_com_channel)
+        self.register_state(initial_game_state)
         self.last_score = 0
         self.last_state = dict()
         self.round_done = False
@@ -166,5 +163,5 @@ class Env(py_environment.PyEnvironment):
 if __name__ == "__main__":
     from tf_agents.environments.utils import validate_py_environment
 
-    myEnv = Env(with_print=True)
+    myEnv = Env(with_print=False)
     validate_py_environment(myEnv, episodes=5)
