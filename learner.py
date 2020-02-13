@@ -75,7 +75,7 @@ def collect_step(env, policy, buf):
     ts = env.current_time_step()
     if ts.is_last():
         env.reset()
-    print(ts.observation['constraint'])
+    #print(ts.observation)
     action_step = policy.action(ts)
     next_ts = env.step(action_step.action)
     traj = trajectory.from_transition(ts, action_step, next_ts)
@@ -91,7 +91,7 @@ collect_data(env, random_policy, replay_buffer, steps=num_eval_episodes)
 
 dataset = replay_buffer.as_dataset(
     num_parallel_calls=1, sample_batch_size=3, num_steps=2
-)
+).prefetch(1)
 
 it = iter(dataset)
 
@@ -102,7 +102,7 @@ agent.train_step_counter.assign(0)
 avg_return = compute_avrg_return(env, agent.policy, num_eval_episodes)
 returns = [avg_return]
 
-num_iterations = 500
+num_iterations = 1000
 
 for _ in range(num_iterations):
     collect_step(env, agent.collect_policy, replay_buffer)
@@ -111,7 +111,7 @@ for _ in range(num_iterations):
     train_loss = agent.train(experience).loss
     step = agent.train_step_counter.numpy()
 
-    if step % 5 == 0:
+    if step % 10 == 0:
         print("step = {0}: loss = {1}".format(step, train_loss))
     if step % 20 == 0:
         avg_return = compute_avrg_return(env, agent.policy, 1)

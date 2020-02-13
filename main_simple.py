@@ -3,9 +3,15 @@ import itertools
 import random
 import click
 import numpy as np
-
+from enum import Enum
 
 trump = None
+
+class GameState(Enum):
+    GuessingTricks = 1
+    PlayingCards = 2
+    RoundFinished = 3
+    Done = 4
 
 
 def rotate(l, n):
@@ -206,17 +212,19 @@ class Player:
         return f"Player(n={self.n},score={self.score})"
 
     def get_state_and_choice_mask(self, game):
-        state = [self.score, self.guessed_tricks]
-        choice_mask = []
-        for i in range(game.last_round):
-            try:
-                state.append(self.cards[i].get_state())
-                choice_mask.append(1)
-            except IndexError:
-                state.append(Card.make_invalid().get_state())
-                choice_mask.append(0)
-        choice_mask.append(0)
-        return state, choice_mask
+        player_state = [self.score, self.guessed_tricks]
+        card_states = [c.get_state() for c in self.cards]
+
+        # get the choice mask right
+        if game.game_state == GameState.PlayingCards:
+            choice_mask = [i < len(card_states) for i in range(game.last_round)] + [0]
+        else:
+            choice_mask = [1]*game.last_round + [1]
+
+        #fill with invalid cards
+        card_states.extend([Card.make_invalid().get_state()]*(game.last_round - len(card_states)))
+        
+        return player_state+card_states, choice_mask
 
 
 class Game:
@@ -226,8 +234,7 @@ class Game:
         self.players = [Player(i, i in random_idxs) for i in range(nplayers)]
         self._random_idxs = random_idxs
         self.current_trick = Trick()
-        self.round_finished = False
-        self.game_over = False
+        self.game_state = GameState.GuessingTricks
         global _print
         _print = print_function
 
@@ -250,7 +257,7 @@ class Game:
                 winner = p.n
                 score = p.score
         _print(f"Congratz to Player {winner}, who won with a score of {score}")
-        self.game_over = True
+        self.game_state = GameState.Done
         yield self.get_state_and_choice_mask()
 
     @staticmethod
@@ -271,14 +278,14 @@ class Game:
             for p in self.players:
                 p.recieve_card(cards.draw())
 
+        self.game_state = GameState.GuessingTricks
         yield self.get_state_and_choice_mask()
-
         for p in self.players:
             p.show_cards_with_index()
             yield from p.guess_tricks(self)
-        self.round_finished = False  # new round begins
 
         winner_idx = 0  # not really, only the guy who starts
+        self.game_state = GameState.PlayingCards
         for _ in range(Round):  # there are #rounds cards per player
             self.current_trick = Trick()
             players = rotate(self.players, winner_idx)
@@ -301,7 +308,7 @@ class Game:
 
         for p in self.players:
             p.score += self.determine_score(p.guessed_tricks, p.trick_count)
-        self.round_finished = True  # round ends
+        self.game_state = GameState.RoundFinished
 
     def get_state_and_choice_mask(self):
         game_state = []
@@ -312,11 +319,11 @@ class Game:
         for p in rotate(self.players, rotate_idx):
             state, choice_mask = p.get_state_and_choice_mask(self)
             game_state.extend(state)
-            if p.n not in self._random_idxs:
+            if p.n not in self._random_idxs: # CAUTION works only for 1 player
                 player_choice_mask = choice_mask
         game_state.extend(self.current_trick.get_state(self))
-        game_state.append(self.round_finished)
-        game_state.append(self.game_over)
+        game_state.append(self.game_state == GameState.RoundFinished)
+        game_state.append(self.game_state == GameState.Done)
         return {"state" : game_state, "mask" : player_choice_mask}
 
     def prompt(self, msg, type=int):
