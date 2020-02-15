@@ -88,6 +88,8 @@ class Card:
             return True
         elif self.is_joker():
             return False
+        elif other.is_joker():
+            return True
         elif other.is_trump() and not self.is_trump():
             return False
         elif self.is_trump() and not other.is_trump():
@@ -126,7 +128,7 @@ class CardStack:
         """
         shuffle the card deck
         """
-        random.seed(45)
+        #random.seed(45)
         random.shuffle(self.deck)
 
     def draw(self):
@@ -177,6 +179,12 @@ class Player:
 
     def recieve_card(self, card):
         self.cards.append(card)
+
+    def calc_and_set_score(self):
+        if self.guessed_tricks == self.trick_count:
+            self.score = 2 + self.trick_count
+        else:
+            self.score = -1 * abs(self.guessed_tricks - self.trick_count)
 
     def play_card(self, game, color_to_serve=None):
         while True:
@@ -270,13 +278,6 @@ class Game:
         self.game_state = GameState.Done
         yield self.get_state_and_choice_mask()
 
-    @staticmethod
-    def determine_score(guess, count):
-        if guess == count:
-            return 2 + guess
-        else:
-            return -1 * abs(guess - count)
-
     def play_round(self, Round):
         global trump
         trump = None  # random.choice(Card.normal_colors + (None,))
@@ -316,7 +317,7 @@ class Game:
             _print(f"\nState: {self.get_state_and_choice_mask()}\n")
 
         for p in self.players:
-            p.score += self.determine_score(p.guessed_tricks, p.trick_count)
+            p.calc_and_set_score()
         self.game_state = GameState.RoundFinished
 
     def get_state_and_choice_mask(self):
@@ -353,3 +354,9 @@ if __name__ == "__main__":
     g = Game(click.prompt("Number of players?", type=int))
     game = g.play()
     next(game)
+    while True:
+        try:
+            game.send(0)
+        except StopIteration:
+            game = g.play()
+            next(game)
