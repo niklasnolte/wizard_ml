@@ -52,16 +52,16 @@ class Env(py_environment.PyEnvironment):
                     "score": score_spec("enemy_score"),
                     "trick_guess": score_spec("enemy_trick_guess"),
                     "cards": {
-                        "0": cards_spec("enemy_first_card"),
-                        "1": cards_spec("enemy_first_card"),
+                        "0": cards_spec("enemy_0_card"),
+                        "1": cards_spec("enemy_1_card"),
                     },
                 },
                 "Player_1": {
                     "score": score_spec("my_score"),
                     "trick_guess": score_spec("my_trick_guess"),
                     "cards": {
-                        "0": cards_spec("my_first_card"),
-                        "1": cards_spec("my_first_card"),
+                        "0": cards_spec("my_0_card"),
+                        "1": cards_spec("my_1_card"),
                     },
                 },
                 "trick": {
