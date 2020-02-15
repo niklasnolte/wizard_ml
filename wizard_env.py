@@ -11,6 +11,7 @@ from tf_agents.specs import array_spec
 from tf_agents.trajectories import time_step as ts
 
 from collections.abc import Iterable
+from collections import defaultdict
 
 
 class Env(py_environment.PyEnvironment):
@@ -46,18 +47,28 @@ class Env(py_environment.PyEnvironment):
         )
 
         self._observation_spec = {
-            "state": (
-                score_spec("enemy_score"),
-                score_spec("enemy_trick_guess"),
-                cards_spec("enemy_first_card"),
-                cards_spec("enemy_second_card"),
-                score_spec("my_score"),
-                score_spec("my_trick_guess"),
-                cards_spec("my_first_card"),
-                cards_spec("my_second_card"),
-                cards_spec("first_in_trick"),
-                cards_spec("second_in_trick"),
-            ),
+            "state": {
+                "Player_0": {
+                    "score": score_spec("enemy_score"),
+                    "trick_guess": score_spec("enemy_trick_guess"),
+                    "cards": {
+                        "0": cards_spec("enemy_first_card"),
+                        "1": cards_spec("enemy_first_card"),
+                    },
+                },
+                "Player_1": {
+                    "score": score_spec("my_score"),
+                    "trick_guess": score_spec("my_trick_guess"),
+                    "cards": {
+                        "0": cards_spec("my_first_card"),
+                        "1": cards_spec("my_first_card"),
+                    },
+                },
+                "trick": {
+                    "0": cards_spec("first_in_trick"),
+                    "1": cards_spec("second_in_trick"),
+                },
+            },
             "constraint": self._action_mask_spec,
         }
 
@@ -107,17 +118,9 @@ class Env(py_environment.PyEnvironment):
         self.fig.canvas.draw()
 
     def register_state(self, game_state):
-        self._state = dict(
-            state=tuple(
-                np.array(value, dtype=np.int32)
-                if isinstance(value, Iterable)
-                else np.array([value], dtype=np.int32)
-                for value in game_state['state'][:-2]
-            ),
-            constraint=np.array(game_state['mask'], dtype=np.int32),
-        )
-        self.round_done = game_state['state'][-2]
-        self.game_done = game_state['state'][-1]
+        self.round_done = game_state.pop("round_done")
+        self.game_done = game_state.pop("game_over")
+        self._state = game_state
 
     def _step(self, action):
         if self.game_done:
@@ -131,7 +134,7 @@ class Env(py_environment.PyEnvironment):
             self.last_state = self._state
             if self.round_done or self.game_done:
                 # my score is the reward
-                reward = float(self._state['state'][4][0])
+                reward = float(self._state["state"]["Player_1"]["score"][0])
                 self.last_score = reward
                 return reward
             else:
@@ -146,7 +149,6 @@ class Env(py_environment.PyEnvironment):
 
     def _reset(self):
         self.game_done = False
-        self._state = dict()
         if self.visualize:
             self.scores.append(self.last_score)
             self.replot()
@@ -158,6 +160,24 @@ class Env(py_environment.PyEnvironment):
         self.round_done = False
         self.game_done = False
         return ts.restart(self._state)
+
+
+# to flatten the observation spec
+def flatten_dict(dd, separator="_", prefix=""):
+    return (
+        {
+            prefix + separator + k if prefix else k: v
+            for kk, vv in dd.items()
+            for k, v in flatten_dict(vv, separator, kk).items()
+        }
+        if isinstance(dd, dict)
+        else {prefix: dd}
+    )
+
+
+def flatten_observation(obs):
+    flat_dict = flatten_dict(obs)
+    return list(flat_dict.values())
 
 
 if __name__ == "__main__":

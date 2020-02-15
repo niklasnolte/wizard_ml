@@ -5,7 +5,16 @@ import click
 import numpy as np
 from enum import Enum
 
+from collections.abc import Iterable
+
 trump = None
+
+# for compliance with the env
+def make_arr(x):
+    if not isinstance(x, Iterable):
+        x = (x,)
+    return np.array(x, dtype=np.int32)
+
 
 class GameState(Enum):
     GuessingTricks = 1
@@ -89,7 +98,12 @@ class Card:
             return self.value > other.value
 
     def get_state(self):
-        return (self.colorcode, self.value)
+        return make_arr((self.colorcode, self.value))
+
+
+def fill_invalid(size, cards):
+    l = size - len(cards)
+    return tuple(cards + [Card.make_invalid().get_state()] * l)
 
 
 class CardStack:
@@ -112,7 +126,6 @@ class CardStack:
         """
         shuffle the card deck
         """
-        # random.seed(43)
         random.seed(45)
         random.shuffle(self.deck)
 
@@ -141,13 +154,7 @@ class Trick:
         return str(self.cards)
 
     def get_state(self, game):
-        state = []
-        for i in range(game.last_round):
-            try:
-                state.append(self.cards[i].get_state())
-            except IndexError:
-                state.append(Card.make_invalid().get_state())
-        return state
+        return fill_invalid(game.last_round, [c.get_state() for c in self.cards])
 
     def determine_winner(self):
         winner = 0
@@ -187,7 +194,9 @@ class Player:
                     raise IndexError(f"please serve {color_to_serve}")
                 return self.cards.pop(index)
             except IndexError:
-                _print("Please pick a valid index")
+                #this should not happen...
+                print(f"Please pick a valid index {game.get_state_and_choice_mask()}")
+                
 
     def show_cards_with_index(self):
         _print(f"\n\nCards of Player {self.n}:")
@@ -212,19 +221,20 @@ class Player:
         return f"Player(n={self.n},score={self.score})"
 
     def get_state_and_choice_mask(self, game):
-        player_state = [self.score, self.guessed_tricks]
+        player_state = dict(
+            score=make_arr(self.score), trick_guess=make_arr(self.guessed_tricks)
+        )
         card_states = [c.get_state() for c in self.cards]
 
         # get the choice mask right
         if game.game_state == GameState.PlayingCards:
             choice_mask = [i < len(card_states) for i in range(game.last_round)] + [0]
         else:
-            choice_mask = [1]*game.last_round + [1]
+            choice_mask = [1] * game.last_round + [1]
 
-        #fill with invalid cards
-        card_states.extend([Card.make_invalid().get_state()]*(game.last_round - len(card_states)))
-        
-        return player_state+card_states, choice_mask
+        # fill with invalid cards
+        player_state["cards"] = fill_invalid(game.last_round, card_states)
+        return player_state, make_arr(choice_mask)
 
 
 class Game:
@@ -279,7 +289,6 @@ class Game:
                 p.recieve_card(cards.draw())
 
         self.game_state = GameState.GuessingTricks
-        yield self.get_state_and_choice_mask()
         for p in self.players:
             p.show_cards_with_index()
             yield from p.guess_tricks(self)
@@ -311,20 +320,23 @@ class Game:
         self.game_state = GameState.RoundFinished
 
     def get_state_and_choice_mask(self):
-        game_state = []
+        game_state = dict()
         rotate_idx = 0
         for i, p in enumerate(self.players):
             if p.n == 0:
                 rotate_idx = i
         for p in rotate(self.players, rotate_idx):
             state, choice_mask = p.get_state_and_choice_mask(self)
-            game_state.extend(state)
-            if p.n not in self._random_idxs: # CAUTION works only for 1 player
-                player_choice_mask = choice_mask
-        game_state.extend(self.current_trick.get_state(self))
-        game_state.append(self.game_state == GameState.RoundFinished)
-        game_state.append(self.game_state == GameState.Done)
-        return {"state" : game_state, "mask" : player_choice_mask}
+            game_state[f"Player_{p.n}"] = state
+            if not p.random:  # CAUTION works only for 1 non-random player
+                player_choice_mask = make_arr(choice_mask)
+        game_state["trick"] = self.current_trick.get_state(self)
+        return {
+            "state": game_state,
+            "constraint": player_choice_mask,
+            "round_done": self.game_state == GameState.RoundFinished,
+            "game_over": self.game_state == GameState.Done,
+        }
 
     def prompt(self, msg, type=int):
         _print(msg)

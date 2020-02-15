@@ -10,16 +10,20 @@ from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.trajectories import trajectory
 from tf_agents.utils import common
 
-from wizard_env import Env
+from wizard_env import Env, flatten_observation
 
 num_eval_episodes = 20
 
 env = tf_py_environment.TFPyEnvironment(Env(with_print=False))
 
-concat_layer = tf.keras.layers.Lambda(lambda x: tf.keras.layers.Concatenate()(list(x)))
+concat_layer = tf.keras.layers.Lambda(
+    lambda x: tf.keras.layers.Concatenate()(flatten_observation(x))
+)
 
 q_net = q_network.QNetwork(
-    env.observation_spec()['state'], env.action_spec(), preprocessing_combiner=concat_layer
+    env.observation_spec()["state"],
+    env.action_spec(),
+    preprocessing_combiner=concat_layer,
 )
 
 
@@ -73,9 +77,6 @@ replay_buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(
 
 def collect_step(env, policy, buf):
     ts = env.current_time_step()
-    if ts.is_last():
-        env.reset()
-    #print(ts.observation)
     action_step = policy.action(ts)
     next_ts = env.step(action_step.action)
     traj = trajectory.from_transition(ts, action_step, next_ts)
@@ -86,12 +87,13 @@ def collect_data(env, policy, buf, steps):
     for _ in range(steps):
         collect_step(env, policy, buf)
 
-#initial data collection
-collect_data(env, random_policy, replay_buffer, steps=num_eval_episodes)
+
+# initial data collection
+collect_data(env, random_policy, replay_buffer, steps=10)
 
 dataset = replay_buffer.as_dataset(
-    num_parallel_calls=1, sample_batch_size=3, num_steps=2
-).prefetch(1)
+    num_parallel_calls=1, sample_batch_size=10, num_steps=2
+)
 
 it = iter(dataset)
 
@@ -102,7 +104,7 @@ agent.train_step_counter.assign(0)
 avg_return = compute_avrg_return(env, agent.policy, num_eval_episodes)
 returns = [avg_return]
 
-num_iterations = 1000
+num_iterations = 5000
 
 for _ in range(num_iterations):
     collect_step(env, agent.collect_policy, replay_buffer)
