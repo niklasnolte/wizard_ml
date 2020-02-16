@@ -1,21 +1,16 @@
-import math
-import gym
-from gym import spaces, logger
 import numpy as np
-from main_simple import Card, Game
-import multiprocessing
-import matplotlib.pyplot as plt
-import random
+from main_simple import Game
 from tf_agents.environments import py_environment
+from tf_agents.environments import parallel_py_environment
 from tf_agents.specs import array_spec
 from tf_agents.trajectories import time_step as ts
 
+from functools import partial
 from collections.abc import Iterable
-from collections import defaultdict
 
 
-class Env(py_environment.PyEnvironment):
-    def __init__(self, average_over=50, visualize=False, with_print=True):
+class WizardEnv(py_environment.PyEnvironment):
+    def __init__(self, with_print=True):
         global _print
         _print = print if with_print else (lambda *args, **kwargs: None)
         # 0 = white
@@ -24,12 +19,11 @@ class Env(py_environment.PyEnvironment):
         # 3 = green
         # 4 = yellow
         # -1 - 14 = values (-1 = no card there)
-        self.visualize = visualize
         cards_spec = lambda name: array_spec.BoundedArraySpec(
             shape=(2,), minimum=[0, -1], maximum=[4, 14], name=name, dtype=np.int32
         )
-        score_spec = lambda name: array_spec.BoundedArraySpec(
-            shape=(1,), minimum=-100, maximum=100, name=name, dtype=np.int32
+        score_spec = lambda name: array_spec.ArraySpec(
+            shape=(1,), name=name, dtype=np.int32
         )
         # TODO make player space to abstract further
 
@@ -52,21 +46,21 @@ class Env(py_environment.PyEnvironment):
                     "score": score_spec("enemy_score"),
                     "trick_guess": score_spec("enemy_trick_guess"),
                     "cards": {
-                        "0": cards_spec("enemy_0_card"),
-                        "1": cards_spec("enemy_1_card"),
+                        0: cards_spec("enemy_0_card"),
+                        1: cards_spec("enemy_1_card"),
                     },
                 },
                 "Player_1": {
                     "score": score_spec("my_score"),
                     "trick_guess": score_spec("my_trick_guess"),
                     "cards": {
-                        "0": cards_spec("my_0_card"),
-                        "1": cards_spec("my_1_card"),
+                        0: cards_spec("my_0_card"),
+                        1: cards_spec("my_1_card"),
                     },
                 },
                 "trick": {
-                    "0": cards_spec("first_in_trick"),
-                    "1": cards_spec("second_in_trick"),
+                    0: cards_spec("0_in_trick"),
+                    1: cards_spec("1_in_trick"),
                 },
             },
             "constraint": self._action_mask_spec,
@@ -74,20 +68,7 @@ class Env(py_environment.PyEnvironment):
 
         self.last_score = 0
 
-        if self.visualize:
-            self.scores = []
-            self.i = 0
-            self.average_over = average_over
-            self.fig, self.ax = plt.subplots()
-            (self.line,) = self.ax.plot([], [], "x", lw=1, label="1 game")
-            (self.avgline,) = self.ax.plot(
-                [], [], lw=2, label="{} game average".format(self.average_over)
-            )
-            self.ax.set_xlabel("games")
-            self.ax.set_ylabel("score")
-            self.ax.legend(loc="best", ncol=2)
-            self.lasttile = 1
-            plt.show(block=False)
+#        super().__init__()
 
         self.reset()
 
@@ -96,26 +77,6 @@ class Env(py_environment.PyEnvironment):
 
     def observation_spec(self):
         return self._observation_spec
-
-    def replot(self):
-        self.i += 1
-        self.line.set_data(range(len(self.scores)), self.scores)
-
-        if len(self.scores) % self.average_over == 0:
-            averages = np.mean(
-                np.array(self.average_over * [0] + self.scores).reshape(
-                    -1, self.average_over
-                ),
-                axis=1,
-            )
-            self.avgline.set_data(
-                self.average_over * np.array(range(len(averages))), averages
-            )
-            self.fig.savefig("./wurst.pdf")
-
-        self.ax.set_xlim(0, len(self.scores))
-        self.ax.set_ylim(-5, 5)
-        self.fig.canvas.draw()
 
     def register_state(self, game_state):
         self.round_done = game_state.pop("round_done")
@@ -149,9 +110,6 @@ class Env(py_environment.PyEnvironment):
 
     def _reset(self):
         self.game_done = False
-        if self.visualize:
-            self.scores.append(self.last_score)
-            self.replot()
         self.game_com_channel = Game(2, [0], print_function=_print).play()
         initial_game_state = next(self.game_com_channel)
         self.register_state(initial_game_state)
@@ -166,7 +124,7 @@ class Env(py_environment.PyEnvironment):
 def flatten_dict(dd, separator="_", prefix=""):
     return (
         {
-            prefix + separator + k if prefix else k: v
+            prefix + separator + str(k) if prefix else str(k): v
             for kk, vv in dd.items()
             for k, v in flatten_dict(vv, separator, kk).items()
         }
@@ -180,8 +138,18 @@ def flatten_observation(obs):
     return list(flat_dict.values())
 
 
+class MultiWizardEnv(parallel_py_environment.ParallelPyEnvironment):
+    def __init__(self, n_envs=1, with_print=False, **kwargs):
+
+        env_constructors = [partial(WizardEnv, with_print=with_print)] * n_envs
+        super().__init__(env_constructors, **kwargs)
+
+
 if __name__ == "__main__":
     from tf_agents.environments.utils import validate_py_environment
 
-    myEnv = Env(with_print=False)
+    myEnv = WizardEnv(with_print=False)
     validate_py_environment(myEnv, episodes=5)
+
+    my_multi_env = MultiWizardEnv(n_envs=1)
+    validate_py_environment(my_multi_env)
