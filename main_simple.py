@@ -136,7 +136,7 @@ class Trick:
         self.cards = []
 
     def color_to_serve(self):
-        if not len(self.cards):
+        if not self.cards:
             return None
         for card in self.cards:
             if card.is_wizard():
@@ -176,6 +176,16 @@ class Player:
     def recieve_card(self, card):
         self.cards.append(card)
 
+    def playable_cards(self, color_to_serve=None):
+        my_colors = [c.color for c in self.cards]
+        return [
+            not color_to_serve
+            or c.is_special()
+            or c.color == color_to_serve
+            or color_to_serve not in my_colors
+            for c in self.cards
+        ]
+
     def calc_and_set_score(self):
         if self.guessed_tricks == self.trick_count:
             self.score = 2 + self.trick_count
@@ -189,12 +199,7 @@ class Player:
             else:
                 index = yield from game.prompt("Pick index of card to play", type=int)
             try:
-                if (
-                    color_to_serve
-                    and not self.cards[index].is_special()
-                    and self.cards[index].color != color_to_serve
-                    and color_to_serve in [card.color for card in self.cards]
-                ):
+                if not self.playable_cards(color_to_serve)[index]:
                     raise IndexError(f"please serve {color_to_serve}")
                 return self.cards.pop(index)
             except IndexError:
@@ -223,15 +228,17 @@ class Player:
     def __repr__(self):
         return f"Player(n={self.n},score={self.score})"
 
-    def get_state_and_choice_mask(self, game):
+    def get_state_and_choice_mask(self, game, color_to_serve=None):
         player_state = dict(
             score=make_arr(self.score), trick_guess=make_arr(self.guessed_tricks)
         )
         card_states = [c.get_state() for c in self.cards]
 
+        color_mask = self.playable_cards(color_to_serve)
+
         # get the choice mask right
         if game.game_state == GameState.PlayingCards:
-            choice_mask = [i < len(card_states) for i in range(game.last_round)] + [0]
+            choice_mask = color_mask + [0]*(game.last_round + 1 - len(color_mask))
         else:
             choice_mask = [1] * game.last_round + [1]
 
@@ -321,7 +328,9 @@ class Game:
             if p.n == 0:
                 rotate_idx = i
         for p in rotate(self.players, rotate_idx):
-            state, choice_mask = p.get_state_and_choice_mask(self)
+            state, choice_mask = p.get_state_and_choice_mask(
+                self, self.current_trick.color_to_serve()
+            )
             game_state[f"Player_{p.n}"] = state
             if not p.random:  # CAUTION works only for 1 non-random player
                 player_choice_mask = make_arr(choice_mask)

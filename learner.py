@@ -10,11 +10,13 @@ from tf_agents.policies import random_tf_policy
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.trajectories import trajectory
 from tf_agents.utils import common
+from tf_agents.drivers import dynamic_episode_driver
+from tf_agents.metrics import tf_metrics
 
-from wizard_env import Env, flatten_observation
+from wizard_env import MultiWizardEnv, flatten_observation
 
 # %%
-env = tf_py_environment.TFPyEnvironment(Env(with_print=False))
+env = tf_py_environment.TFPyEnvironment(MultiWizardEnv(n_envs=1, with_print=False))
 
 # %%
 concat_layer = tf.keras.layers.Lambda(
@@ -118,12 +120,9 @@ for _ in range(num_iterations):
     #     returns.append(avg_return)
 
 # %%
-from tf_agents.drivers import dynamic_episode_driver
-from tf_agents.metrics import tf_metrics
 
-# %%
 
-def evaluate_with_driver(policy, n_episodes = 500):
+def evaluate_with_driver(env, policy, n_episodes=500):
     n_eps = tf_metrics.NumberOfEpisodes()
     env_steps = tf_metrics.EnvironmentSteps()
     avrg_ret = tf_metrics.AverageReturnMetric()
@@ -133,16 +132,19 @@ def evaluate_with_driver(policy, n_episodes = 500):
     )
     driver.run()
 
-    _which_policy = 'random' if isinstance(policy, random_tf_policy.RandomTFPolicy) else 'trained'
+    _which_policy = (
+        "random" if isinstance(policy, random_tf_policy.RandomTFPolicy) else "trained"
+    )
 
-    print(f'Number of Steps: {env_steps.result().numpy()}')
-    print(f'Number of Episodes: {n_eps.result().numpy()}') 
-    print(f'Avrg return with {_which_policy} policy: {avrg_ret.result().numpy()}')
+    print(f"Number of Steps: {env_steps.result().numpy()}")
+    print(f"Number of Episodes: {n_eps.result().numpy()}")
+    print(f"Avrg return with {_which_policy} policy: {avrg_ret.result().numpy()}")
+
 
 # %%
-evaluate_with_driver(random_policy)
+evaluate_with_driver(env, random_policy)
 
 # %%
-evaluate_with_driver(agent.policy)
+evaluate_with_driver(env, agent.policy)
 
 # %%

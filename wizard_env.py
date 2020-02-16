@@ -20,7 +20,7 @@ class WizardEnv(py_environment.PyEnvironment):
         # 4 = yellow
         # -1 - 14 = values (-1 = no card there)
         cards_spec = lambda name: array_spec.BoundedArraySpec(
-            shape=(2,), minimum=[0, -1], maximum=[4, 14], name=name, dtype=np.int32
+            shape=(2,), minimum=[0, -1], maximum=[5, 14], name=name, dtype=np.int32
         )
         score_spec = lambda name: array_spec.ArraySpec(
             shape=(1,), name=name, dtype=np.int32
@@ -151,5 +151,5 @@ if __name__ == "__main__":
     myEnv = WizardEnv(with_print=False)
     validate_py_environment(myEnv, episodes=5)
 
-    my_multi_env = MultiWizardEnv(n_envs=1)
-    validate_py_environment(my_multi_env)
+    # my_multi_env = MultiWizardEnv(n_envs=1)
+    # validate_py_environment(my_multi_env)
