@@ -36,7 +36,7 @@ class Card:
         y: x for x, y in enumerate([invalid_color, white, red, blue, green, yellow])
     }
 
-    normal_colors = (red, blue, green, yellow)
+    normal_colors = (red,)# blue, green, yellow)
     normal_values = list(range(1, 14))
     joker_color = wizard_color = white
     joker_value = 0
@@ -204,7 +204,7 @@ class Player:
                 return self.cards.pop(index)
             except IndexError:
                 # this should not happen...
-                print(f"Please pick a valid index {game.get_state_and_choice_mask()}")
+                _print(f"Please pick a valid index {game.get_state_and_choice_mask()}")
 
     def show_cards_with_index(self):
         _print(f"\n\nCards of Player {self.n}:")

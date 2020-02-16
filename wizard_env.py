@@ -13,11 +13,12 @@ class WizardEnv(py_environment.PyEnvironment):
     def __init__(self, with_print=True):
         global _print
         _print = print if with_print else (lambda *args, **kwargs: None)
-        # 0 = white
-        # 1 = red
-        # 2 = blue
-        # 3 = green
-        # 4 = yellow
+        # 0 = invalid
+        # 1 = white
+        # 2 = red
+        # 3 = blue
+        # 4 = green
+        # 5 = yellow
         # -1 - 14 = values (-1 = no card there)
         cards_spec = lambda name: array_spec.BoundedArraySpec(
             shape=(2,), minimum=[0, -1], maximum=[5, 14], name=name, dtype=np.int32
@@ -25,7 +26,6 @@ class WizardEnv(py_environment.PyEnvironment):
         score_spec = lambda name: array_spec.ArraySpec(
             shape=(1,), name=name, dtype=np.int32
         )
-        # TODO make player space to abstract further
 
         self._state = dict()
         self.game_done = False
