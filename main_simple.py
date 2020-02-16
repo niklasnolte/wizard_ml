@@ -7,8 +7,6 @@ from enum import Enum
 
 from collections.abc import Iterable
 
-trump = None
-
 # for compliance with the env
 def make_arr(x):
     if not isinstance(x, Iterable):
@@ -38,7 +36,7 @@ class Card:
         y: x for x, y in enumerate([invalid_color, white, red, blue, green, yellow])
     }
 
-    normal_colors = (red,)  # blue, green, yellow)
+    normal_colors = (red, blue, green, yellow)
     normal_values = list(range(1, 14))
     joker_color = wizard_color = white
     joker_value = 0
@@ -72,16 +70,14 @@ class Card:
     def is_joker(self):
         return self.value == self.joker_value
 
-    def is_trump(self):
-        global trump
+    def is_trump(self, trump):
         return self.color == trump
 
     @property
     def colorcode(self):
         return self.color_code_map[self.color]
 
-    def __gt__(self, other):
-        global trump
+    def supersedes(self, other, trump):
         if other.is_wizard():
             return False
         elif self.is_wizard():
@@ -90,9 +86,9 @@ class Card:
             return False
         elif other.is_joker():
             return True
-        elif other.is_trump() and not self.is_trump():
+        elif other.is_trump(trump) and not self.is_trump(trump):
             return False
-        elif self.is_trump() and not other.is_trump():
+        elif self.is_trump(trump) and not other.is_trump(trump):
             return True
         elif self.color != other.color:
             return False
@@ -105,7 +101,7 @@ class Card:
 
 def fill_invalid(size, cards):
     l = size - len(cards)
-    return tuple(cards + [Card.make_invalid().get_state()] * l)
+    return {k: v for k, v in enumerate(cards + [Card.make_invalid().get_state()] * l)}
 
 
 class CardStack:
@@ -128,7 +124,7 @@ class CardStack:
         """
         shuffle the card deck
         """
-        #random.seed(45)
+        # random.seed(45)
         random.shuffle(self.deck)
 
     def draw(self):
@@ -158,10 +154,10 @@ class Trick:
     def get_state(self, game):
         return fill_invalid(game.last_round, [c.get_state() for c in self.cards])
 
-    def determine_winner(self):
+    def determine_winner(self, trump):
         winner = 0
         for i, card in enumerate(self.cards):
-            if card > self.cards[winner]:
+            if card.supersedes(self.cards[winner], trump):
                 winner = i
         return winner
 
@@ -202,9 +198,8 @@ class Player:
                     raise IndexError(f"please serve {color_to_serve}")
                 return self.cards.pop(index)
             except IndexError:
-                #this should not happen...
+                # this should not happen...
                 print(f"Please pick a valid index {game.get_state_and_choice_mask()}")
-                
 
     def show_cards_with_index(self):
         _print(f"\n\nCards of Player {self.n}:")
@@ -279,7 +274,6 @@ class Game:
         yield self.get_state_and_choice_mask()
 
     def play_round(self, Round):
-        global trump
         trump = None  # random.choice(Card.normal_colors + (None,))
         _print(f"\nTRUMP FOR THIS ROUND: {trump}")
         _print(f"\n\nStarting round {Round}\n")
@@ -305,7 +299,7 @@ class Game:
                 card = yield from p.play_card(self, color_to_serve)
                 self.current_trick.add(card)
                 _print(f"\nCurrent trick: {self.current_trick}\n")
-            winner_idx = self.current_trick.determine_winner()
+            winner_idx = self.current_trick.determine_winner(trump)
             winner = players[winner_idx]
             winner.trick_count += 1
             _print(f"Player {winner.n} won this trick.\n\n")
