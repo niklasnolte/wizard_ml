@@ -20,10 +20,15 @@ from wizard_env import MultiWizardEnv, WizardEnv, flatten_observation
 
 
 # %%
-num_parallel_environments = 50
-env = tf_py_environment.TFPyEnvironment(
-    MultiWizardEnv(n_envs=num_parallel_environments, with_print=False)
-)
+num_parallel_environments = 10
+use_rnn = True
+
+if num_parallel_environments == 1:
+    env = tf_py_environment.TFPyEnvironment(WizardEnv(with_print=False))
+else:
+    env = tf_py_environment.TFPyEnvironment(
+        MultiWizardEnv(n_envs=num_parallel_environments, with_print=False)
+    )
 
 # %%
 
@@ -42,11 +47,23 @@ concat_layer = tf.keras.layers.Lambda(
     lambda x: tf.keras.layers.Concatenate()(flatten_observation(x))
 )
 
-q_net = q_network.QNetwork(
-    env.observation_spec()["state"],
-    env.action_spec(),
-    preprocessing_combiner=concat_layer,
-)
+if not use_rnn:
+    q_net = q_network.QNetwork(
+        env.observation_spec()["state"],
+        env.action_spec(),
+        preprocessing_combiner=concat_layer,
+        fc_layer_params=(16, 16),
+    )
+else:
+    q_net = q_rnn_network.QRnnNetwork(
+        env.observation_spec()["state"],
+        env.action_spec(),
+        preprocessing_combiner=concat_layer,
+        input_fc_layer_params=(16,),
+        output_fc_layer_params=(16,),
+        lstm_size=(50,),
+    )
+
 # %%
 agent = dqn_agent.DqnAgent(
     env.time_step_spec(),
@@ -82,33 +99,31 @@ random_policy = random_tf_policy.RandomTFPolicy(
 replay_buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(
     data_spec=agent.collect_data_spec, batch_size=env.batch_size, max_length=10000
 )
+
 # %%
 # initial data collection
 dynamic_step_driver.DynamicStepDriver(
-    env,
-    random_policy,
-    observers=[replay_buffer.add_batch],
-    num_steps=100,
+    env, random_policy, observers=[replay_buffer.add_batch], num_steps=100
 ).run()
 
 # %%
 dataset = replay_buffer.as_dataset(
     num_parallel_calls=5,
-    sample_batch_size=30,#env.batch_size,
+    sample_batch_size=30,  # env.batch_size,
     num_steps=agent._n_step_update + 1
     # sample batch size seems to change a great deal
 ).prefetch(5)
 
 # %%
 collect_driver = dynamic_step_driver.DynamicStepDriver(
-    env,
-    agent.collect_policy,
-    observers=[replay_buffer.add_batch],
-    num_steps=1,
+    env, agent.collect_policy, observers=[replay_buffer.add_batch], num_steps=env.batch_size
 )
+
+collect_driver.run = common.function(collect_driver.run)
 
 # %%
 eval_env = tf_py_environment.TFPyEnvironment(WizardEnv(with_print=False))
+
 
 def evaluate(policy, n_episodes=100):
     eval_env.reset()
@@ -121,9 +136,13 @@ def evaluate(policy, n_episodes=100):
         ),
     )
     # consider metric_utils.eager_compute here
-    dynamic_episode_driver.DynamicEpisodeDriver(
+    dyn_driver = dynamic_episode_driver.DynamicEpisodeDriver(
         eval_env, policy, list(eval_metrics.values()), num_episodes=n_episodes
-    ).run()
+    )
+
+    dyn_driver.run = common.function(dyn_driver.run)
+
+    dyn_driver.run()
 
     _which_policy = (
         "random" if isinstance(policy, random_tf_policy.RandomTFPolicy) else "trained"
@@ -143,16 +162,16 @@ def train(num_iterations=5000):
     time_step = None
     policy_state = agent.collect_policy.get_initial_state(env.batch_size)
 
-    for _ in range(0, num_iterations, num_parallel_environments):
+    for _ in range(0, num_iterations):
         time_step, policy_state = collect_driver.run(
             time_step=time_step, policy_state=policy_state
         )
 
         experience, _ = next(it)
         train_loss = agent.train(experience).loss
-        step = agent.train_step_counter.numpy() * num_parallel_environments
+        step = agent.train_step_counter.numpy()
 
-        if step % 500 in list(range(num_parallel_environments)):
+        if step % (num_iterations // 5) == 0:
             print("step = {0}: loss = {1}".format(step, train_loss))
             evaluate(agent.policy, 50)
 
@@ -161,7 +180,7 @@ def train(num_iterations=5000):
 evaluate(random_policy, 500)
 
 # %%
-train(5000)
+train(10000)
 
 # %%
 evaluate(agent.policy, 500)

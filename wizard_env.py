@@ -30,14 +30,18 @@ class WizardEnv(py_environment.PyEnvironment):
         self._state = dict()
         self.game_done = False
 
+        self.last_round = 2
+
         self._action_spec = array_spec.BoundedArraySpec(
-            shape=(1,), minimum=0, maximum=2, name="action", dtype=np.int32
+            shape=(1,),
+            minimum=0,
+            maximum=self.last_round,
+            name="action",
+            dtype=np.int32,
         )
 
-        n_actions = self._action_spec._maximum - self._action_spec._minimum + 1
-
         self._action_mask_spec = array_spec.BoundedArraySpec(
-            shape=(n_actions,), minimum=0, maximum=1, dtype=np.int32
+            shape=(self.last_round+1,), minimum=0, maximum=1, dtype=np.int32
         )
 
         self._observation_spec = {
@@ -46,21 +50,18 @@ class WizardEnv(py_environment.PyEnvironment):
                     "score": score_spec("enemy_score"),
                     "trick_guess": score_spec("enemy_trick_guess"),
                     "cards": {
-                        0: cards_spec("enemy_0_card"),
-                        1: cards_spec("enemy_1_card"),
+                        i: cards_spec(f"enemy_{i}_card") for i in range(self.last_round)
                     },
                 },
                 "Player_1": {
                     "score": score_spec("my_score"),
                     "trick_guess": score_spec("my_trick_guess"),
                     "cards": {
-                        0: cards_spec("my_0_card"),
-                        1: cards_spec("my_1_card"),
+                        i: cards_spec(f"my_{i}_card") for i in range(self.last_round)
                     },
                 },
                 "trick": {
-                    0: cards_spec("0_in_trick"),
-                    1: cards_spec("1_in_trick"),
+                    i: cards_spec(f"trick_{i}_card") for i in range(self.last_round)
                 },
             },
             "constraint": self._action_mask_spec,
@@ -68,7 +69,7 @@ class WizardEnv(py_environment.PyEnvironment):
 
         self.last_score = 0
 
-#        super().__init__()
+        #        super().__init__()
 
         self.reset()
 
@@ -110,7 +111,12 @@ class WizardEnv(py_environment.PyEnvironment):
 
     def _reset(self):
         self.game_done = False
-        self.game_com_channel = Game(2, [0], print_function=_print).play()
+        self.game_com_channel = Game(
+            nplayers=2,
+            random_idxs=[0],
+            last_round=self.last_round,
+            print_function=_print,
+        ).play()
         initial_game_state = next(self.game_com_channel)
         self.register_state(initial_game_state)
         self.last_score = 0

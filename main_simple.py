@@ -36,7 +36,7 @@ class Card:
         y: x for x, y in enumerate([invalid_color, white, red, blue, green, yellow])
     }
 
-    normal_colors = (red,)# blue, green, yellow)
+    normal_colors = (red, blue, green, yellow)
     normal_values = list(range(1, 14))
     joker_color = wizard_color = white
     joker_value = 0
@@ -248,9 +248,9 @@ class Player:
 
 
 class Game:
-    def __init__(self, nplayers, random_idxs=[0], print_function=print):
+    def __init__(self, nplayers, random_idxs=[0], last_round=3, print_function=print):
         self.nplayers = nplayers
-        self.last_round = 2
+        self.last_round = last_round
         self.players = [Player(i, i in random_idxs) for i in range(nplayers)]
         self._random_idxs = random_idxs
         self.current_trick = Trick()
