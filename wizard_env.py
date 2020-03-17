@@ -107,7 +107,7 @@ class WizardEnv(py_environment.PyEnvironment):
         if self.game_done:
             return ts.termination(self._state, reward)
         else:
-            return ts.transition(self._state, reward, discount=0.9)  # TODO discount?
+            return ts.transition(self._state, reward)  # TODO discount?
 
     def _reset(self):
         self.game_done = False

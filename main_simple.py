@@ -199,12 +199,13 @@ class Player:
             else:
                 index = yield from game.prompt("Pick index of card to play", type=int)
             try:
+                _print(f'index: {index}')
                 if not self.playable_cards(color_to_serve)[index]:
                     raise IndexError(f"please serve {color_to_serve}")
                 return self.cards.pop(index)
             except IndexError:
                 # this should not happen...
-                _print(f"Please pick a valid index {game.get_state_and_choice_mask()}")
+                raise IndexError(f"Please pick a valid index {game.get_state_and_choice_mask()}")
 
     def show_cards_with_index(self):
         _print(f"\n\nCards of Player {self.n}:")
@@ -261,7 +262,7 @@ class Game:
     def play(self):
         _print("Lets go!")
 
-        for r in range(1, self.last_round):
+        for r in range(self.last_round - 1, self.last_round): # FIXME from 0 till last_round
             yield from self.play_round(r + 1)
             _print("Scores after round {}:\n".format(r + 1))
             for p in self.players:
@@ -296,10 +297,11 @@ class Game:
             yield from p.guess_tricks(self)
 
         winner_idx = 0  # not really, only the guy who starts
+        players = self.players # we will be rotating this one
         self.game_state = GameState.PlayingCards
         for _ in range(Round):  # there are #rounds cards per player
             self.current_trick = Trick()
-            players = rotate(self.players, winner_idx)
+            players = rotate(players, winner_idx)
             for p in players:
                 p.show_cards_with_index()
                 color_to_serve = self.current_trick.color_to_serve()
@@ -315,11 +317,12 @@ class Game:
                     f"Player {p.n}, you now have {p.trick_count} tricks, and you need {p.guessed_tricks}"
                 )
             _print("")
-            _print(f"\nState: {self.get_state_and_choice_mask()}\n")
+            #_print(f"\nState: {self.get_state_and_choice_mask()}\n")
 
         for p in self.players:
             p.calc_and_set_score()
         self.game_state = GameState.RoundFinished
+        _print(f"\nState at the end of the round: {self.get_state_and_choice_mask()}\n")
 
     def get_state_and_choice_mask(self):
         game_state = dict()
@@ -356,10 +359,3 @@ class Game:
 if __name__ == "__main__":
     g = Game(click.prompt("Number of players?", type=int))
     game = g.play()
-    next(game)
-    while True:
-        try:
-            game.send(0)
-        except StopIteration:
-            game = g.play()
-            next(game)
