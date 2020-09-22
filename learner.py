@@ -22,6 +22,7 @@ from tf_agents.networks import actor_distribution_network
 from tf_agents.networks import actor_distribution_rnn_network
 from tf_agents.networks import value_network
 from tf_agents.networks import value_rnn_network
+from tf_agents.networks import mask_splitter_network
 
 # misc
 from tf_agents.eval import metric_utils
@@ -33,13 +34,14 @@ from tf_agents.drivers import dynamic_step_driver
 from tf_agents.drivers import dynamic_episode_driver
 from tf_agents.metrics import tf_metrics
 
+from IPython import embed
 
 # %%
 num_parallel_environments = 1
 use_rnn = False
 
 if num_parallel_environments == 1:
-    env = tf_py_environment.TFPyEnvironment(WizardEnv(with_print=True))
+    env = tf_py_environment.TFPyEnvironment(WizardEnv(with_print=False))
 else:
     env = tf_py_environment.TFPyEnvironment(
         MultiWizardEnv(n_envs=num_parallel_environments, with_print=False)
@@ -94,36 +96,41 @@ concat_layer = tf.keras.layers.Lambda(
 #     target_update_period=20,
 # )
 
-if use_rnn:
-    actor_net = actor_distribution_rnn_network.ActorDistributionRnnNetwork(
+
+# actor_net = mask_splitter_network.MaskSplitterNetwork(
+#     split_observation_and_constraint,
+#     actor_distribution_network.ActorDistributionNetwork(
+#         env.observation_spec()['state'],
+#         env.action_spec(),
+#         preprocessing_combiner=concat_layer,
+#         fc_layer_params=(16, 16)
+#     ),
+#     passthrough_mask = True
+# )
+# value_net = mask_splitter_network.MaskSplitterNetwork(
+#     split_observation_and_constraint, 
+#     value_network.ValueNetwork(
+#         env.observation_spec()['state'],
+#         preprocessing_combiner=concat_layer,
+#         fc_layer_params=(16, 16),
+#     ),
+#     passthrough_mask = False
+# )
+
+actor_net = actor_distribution_network.ActorDistributionNetwork(
         env.observation_spec()['state'],
         env.action_spec(),
         preprocessing_combiner=concat_layer,
-        input_fc_layer_params=(16,),
-        lstm_size=(40,),
-        output_fc_layer_params=None,
+        fc_layer_params=(16, 16)
     )
 
-    value_net = value_rnn_network.ValueRnnNetwork(
-        env.observation_spec()['state'],
-        preprocessing_combiner=concat_layer,
-        input_fc_layer_params=(16, 16),
-        lstm_size=(40,),
-        output_fc_layer_params=None,
-    )
-else:
-    actor_net = actor_distribution_network.ActorDistributionNetwork(
-        env.observation_spec()['state'],
-        env.action_spec(),
-        preprocessing_combiner=concat_layer,
-        fc_layer_params=(16, 16),
-    )
 
-    value_net = value_network.ValueNetwork(
+value_net = value_network.ValueNetwork(
         env.observation_spec()['state'],
         preprocessing_combiner=concat_layer,
         fc_layer_params=(16, 16),
-    )
+)
+
 
 agent = ppo_agent.PPOAgent(
     env.time_step_spec(),
@@ -131,7 +138,8 @@ agent = ppo_agent.PPOAgent(
     optimizer,
     actor_net=actor_net,
     value_net=value_net,
-    num_epochs=25,
+    num_epochs=10,
+    # normalize_observations=False,
     debug_summaries=True,
     summarize_grads_and_vars=True,
     train_step_counter=train_step_counter,
@@ -177,11 +185,18 @@ dataset = replay_buffer.as_dataset(
 ).prefetch(num_parallel_environments)
 
 # %%
+i = []
+
+def count(x):
+    print(len(i))
+    print(agent.collect_policy.action(env.current_time_step()))
+    i.append(1)
+
 collect_driver = dynamic_step_driver.DynamicStepDriver(
     env,
     agent.collect_policy,
     observers=[replay_buffer.add_batch],
-    num_steps=env.batch_size * 2,
+    num_steps= 5,
 )
 
 # %%
@@ -190,7 +205,7 @@ collect_driver = dynamic_step_driver.DynamicStepDriver(
 # collect_driver.run = common.function(collect_driver.run)
 
 # %%
-eval_env = tf_py_environment.TFPyEnvironment(WizardEnv(with_print=True))
+eval_env = tf_py_environment.TFPyEnvironment(WizardEnv(with_print=False))
 
 
 def evaluate(policy, n_episodes=100):
@@ -234,14 +249,12 @@ def train(num_iterations=5000):
         time_step, policy_state = collect_driver.run(
             time_step=time_step, policy_state=policy_state
         )
-
         experience, _ = next(it)
         train_loss = agent.train(experience).loss
         step = agent.train_step_counter.numpy()
-
-        if step % 2000 == 0:
-            print("step = {0}: loss = {1}".format(step, train_loss))
-            evaluate(agent.policy, 50)
+        print("step = {0}: loss = {1}".format(step, train_loss))
+        if step % 100 == 0:
+            evaluate(agent.policy, 100)
 
 
 # %%
@@ -249,10 +262,12 @@ def train(num_iterations=5000):
 
 # %%
 
-try:
+if len(argv) > 1:
     train(int(argv[1]))
-except IndexError:
+else:
     train(10000)
 
 # # %%
 # evaluate(agent.policy, 500)
+
+# %%

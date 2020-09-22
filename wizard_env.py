@@ -21,10 +21,10 @@ class WizardEnv(py_environment.PyEnvironment):
         # 5 = yellow
         # -1 - 14 = values (-1 = no card there)
         cards_spec = lambda name: array_spec.BoundedArraySpec(
-            shape=(2,), minimum=[0, -1], maximum=[5, 14], name=name, dtype=np.int32
+            shape=(2,), minimum=[0, -1], maximum=[5, 14], name=name, dtype=np.float32
         )
         score_spec = lambda name: array_spec.ArraySpec(
-            shape=(1,), name=name, dtype=np.int32
+            shape=(1,), name=name, dtype=np.float32
         )
 
         self._state = dict()
@@ -33,7 +33,7 @@ class WizardEnv(py_environment.PyEnvironment):
         self.last_round = 2
 
         self._action_spec = array_spec.BoundedArraySpec(
-            shape=(1,),
+            shape=(),
             minimum=0,
             maximum=self.last_round,
             name="action",
@@ -41,7 +41,7 @@ class WizardEnv(py_environment.PyEnvironment):
         )
 
         self._action_mask_spec = array_spec.BoundedArraySpec(
-            shape=(self.last_round+1,), minimum=0, maximum=1, dtype=np.int32
+            shape=(self.last_round + 1,), minimum=0, maximum=1, dtype=np.float32
         )
 
         self._observation_spec = {
@@ -49,6 +49,7 @@ class WizardEnv(py_environment.PyEnvironment):
                 "Player_0": {
                     "score": score_spec("enemy_score"),
                     "trick_guess": score_spec("enemy_trick_guess"),
+                    "n_tricks": score_spec("enemy_n_tricks"),
                     "cards": {
                         i: cards_spec(f"enemy_{i}_card") for i in range(self.last_round)
                     },
@@ -56,6 +57,7 @@ class WizardEnv(py_environment.PyEnvironment):
                 "Player_1": {
                     "score": score_spec("my_score"),
                     "trick_guess": score_spec("my_trick_guess"),
+                    "n_tricks": score_spec("my_n_tricks"),
                     "cards": {
                         i: cards_spec(f"my_{i}_card") for i in range(self.last_round)
                     },
@@ -63,12 +65,16 @@ class WizardEnv(py_environment.PyEnvironment):
                 "trick": {
                     i: cards_spec(f"trick_{i}_card") for i in range(self.last_round)
                 },
+                # "now_predicting": array_spec.BoundedArraySpec(
+                #     shape=(1,),
+                #     name="now_predicting",
+                #     minimum=0,
+                #     maximum=1,
+                #     dtype=np.int32,
+                # ),
             },
             "constraint": self._action_mask_spec,
         }
-
-        self.last_score = 0
-
         #        super().__init__()
 
         self.reset()
@@ -100,9 +106,12 @@ class WizardEnv(py_environment.PyEnvironment):
                 self.last_score = reward
                 return reward
             else:
-                return 0
+                return -1.0 * abs(
+                    self._state["state"]["Player_1"]["n_tricks"][0]
+                    - self._state["state"]["Player_1"]["trick_guess"][0]
+                )
 
-        reward = calculate_reward() * 1.0
+        reward = calculate_reward()
         _print("reward: ", reward)
         if self.game_done:
             return ts.termination(self._state, reward)

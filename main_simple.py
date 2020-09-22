@@ -6,12 +6,14 @@ import numpy as np
 from enum import Enum
 
 from collections.abc import Iterable
+import tensorflow as tf
 
+random.seed(10)
 # for compliance with the env
 def make_arr(x):
     if not isinstance(x, Iterable):
         x = (x,)
-    return np.array(x, dtype=np.int32)
+    return tf.constant(x, dtype=np.float32)
 
 
 class GameState(Enum):
@@ -56,6 +58,7 @@ class Card:
         """
         defining a wizard card
         """
+        assert color in self.color_code_map.keys()
         if value in (self.joker_value, self.wizard_value):
             assert color == self.joker_color
         self.color = color
@@ -124,8 +127,11 @@ class CardStack:
         """
         shuffle the card deck
         """
-        # random.seed(45)
         random.shuffle(self.deck)
+        self.deck.append(Card(Card.blue, 3))
+        self.deck.append(Card(Card.blue, 6))
+        self.deck.append(Card(Card.blue, 5))
+        self.deck.append(Card(Card.blue, 4))
 
     def draw(self):
         return self.deck.pop(-1)
@@ -199,13 +205,15 @@ class Player:
             else:
                 index = yield from game.prompt("Pick index of card to play", type=int)
             try:
-                _print(f'index: {index}')
+                _print(f"index: {index}")
                 if not self.playable_cards(color_to_serve)[index]:
                     raise IndexError(f"please serve {color_to_serve}")
                 return self.cards.pop(index)
             except IndexError:
                 # this should not happen...
-                raise IndexError(f"Please pick a valid index {game.get_state_and_choice_mask()}")
+                raise IndexError(
+                    f"Please pick a valid index for {game.get_state_and_choice_mask()}. \n You picked {index}"
+                )
 
     def show_cards_with_index(self):
         _print(f"\n\nCards of Player {self.n}:")
@@ -231,7 +239,9 @@ class Player:
 
     def get_state_and_choice_mask(self, game, color_to_serve=None):
         player_state = dict(
-            score=make_arr(self.score), trick_guess=make_arr(self.guessed_tricks)
+            score=make_arr(self.score),
+            trick_guess=make_arr(self.guessed_tricks),
+            n_tricks=make_arr(self.trick_count),
         )
         card_states = [c.get_state() for c in self.cards]
 
@@ -239,7 +249,7 @@ class Player:
 
         # get the choice mask right
         if game.game_state == GameState.PlayingCards:
-            choice_mask = color_mask + [0]*(game.last_round + 1 - len(color_mask))
+            choice_mask = color_mask + [0] * (game.last_round + 1 - len(color_mask))
         else:
             choice_mask = [1] * game.last_round + [1]
 
@@ -262,7 +272,9 @@ class Game:
     def play(self):
         _print("Lets go!")
 
-        for r in range(self.last_round - 1, self.last_round): # FIXME from 0 till last_round
+        for r in range(
+            self.last_round - 1, self.last_round
+        ):  # FIXME from 0 till last_round
             yield from self.play_round(r + 1)
             _print("Scores after round {}:\n".format(r + 1))
             for p in self.players:
@@ -297,7 +309,7 @@ class Game:
             yield from p.guess_tricks(self)
 
         winner_idx = 0  # not really, only the guy who starts
-        players = self.players # we will be rotating this one
+        players = self.players  # we will be rotating this one
         self.game_state = GameState.PlayingCards
         for _ in range(Round):  # there are #rounds cards per player
             self.current_trick = Trick()
@@ -317,7 +329,7 @@ class Game:
                     f"Player {p.n}, you now have {p.trick_count} tricks, and you need {p.guessed_tricks}"
                 )
             _print("")
-            #_print(f"\nState: {self.get_state_and_choice_mask()}\n")
+            # _print(f"\nState: {self.get_state_and_choice_mask()}\n")
 
         for p in self.players:
             p.calc_and_set_score()
@@ -342,6 +354,7 @@ class Game:
             "state": game_state,
             "constraint": player_choice_mask,
             "round_done": self.game_state == GameState.RoundFinished,
+            # "now_predicting": int(self.game_state == GameState.GuessingTricks),
             "game_over": self.game_state == GameState.Done,
         }
 
