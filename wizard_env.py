@@ -1,138 +1,105 @@
-import numpy as np
-from main_simple import Game
-from tf_agents.environments import py_environment
-from tf_agents.environments import parallel_py_environment
-from tf_agents.specs import array_spec
-from tf_agents.trajectories import time_step as ts
+from game import Game
 
-from functools import partial
-from collections.abc import Iterable
+# 0 = invalid
+# 1 = white
+# 2 = red
+# 3 = blue
+# 4 = green
+# 5 = yellow
+# -1 - 14 = values (-1 = no card there)
+# card type = Tuple(color, value)
+# action type = Int[0,n_rounds]
+# action_mask type = List[bool]
+# trick guess type = Int[0,n_rounds]
+
+# observation =
+#     "state": {
+#         "Player_0": {
+#             "score": score_spec("enemy_score"),
+#             "trick_guess": score_spec("enemy_trick_guess"),
+#             "n_tricks": score_spec("enemy_n_tricks"),
+#             "cards": {
+#                 i: cards_spec(f"enemy_{i}_card") for i in range(self.n_rounds)
+#             },
+#         },
+#         "Player_1": {
+#             "score": score_spec("my_score"),
+#             "trick_guess": score_spec("my_trick_guess"),
+#             "n_tricks": score_spec("my_n_tricks"),
+#             "cards": {
+#                 i: cards_spec(f"my_{i}_card") for i in range(self.n_rounds)
+#             },
+#         },
+#         "trick": {
+#             i: cards_spec(f"trick_{i}_card") for i in range(self.n_rounds)
+#         },
+#     },
+#     "constraint": self._action_mask_spec,
+# }
 
 
-class WizardEnv(py_environment.PyEnvironment):
-    def __init__(self, with_print=True):
-        global _print
-        _print = print if with_print else (lambda *args, **kwargs: None)
-        # 0 = invalid
-        # 1 = white
-        # 2 = red
-        # 3 = blue
-        # 4 = green
-        # 5 = yellow
-        # -1 - 14 = values (-1 = no card there)
-        cards_spec = lambda name: array_spec.BoundedArraySpec(
-            shape=(2,), minimum=[0, -1], maximum=[5, 14], name=name, dtype=np.float32
-        )
-        score_spec = lambda name: array_spec.ArraySpec(
-            shape=(1,), name=name, dtype=np.float32
-        )
+class WizardEnv:
+    def __init__(self, debug=False, nplayers=2, n_rounds=2):
+        global debug_print
+        debug_print = print if debug else (lambda *args, **kwargs: None)
 
-        self._state = dict()
         self.game_done = False
+        self.n_rounds = n_rounds
+        self.action_space = list(range(n_rounds + 1))
+        self.nplayers = nplayers
 
-        self.last_round = 2
-
-        self._action_spec = array_spec.BoundedArraySpec(
-            shape=(),
-            minimum=0,
-            maximum=self.last_round,
-            name="action",
-            dtype=np.int32,
+        self.observation_dim = (
+            nplayers * 3  # score, trick_guess, n_tricks
+            + 7  # card repr, 6 for color, 1 for value
+            * self.n_rounds  # so many cards per player
+            * (nplayers + 1)  # player + current trick
         )
-
-        self._action_mask_spec = array_spec.BoundedArraySpec(
-            shape=(self.last_round + 1,), minimum=0, maximum=1, dtype=np.float32
-        )
-
-        self._observation_spec = {
-            "state": {
-                "Player_0": {
-                    "score": score_spec("enemy_score"),
-                    "trick_guess": score_spec("enemy_trick_guess"),
-                    "n_tricks": score_spec("enemy_n_tricks"),
-                    "cards": {
-                        i: cards_spec(f"enemy_{i}_card") for i in range(self.last_round)
-                    },
-                },
-                "Player_1": {
-                    "score": score_spec("my_score"),
-                    "trick_guess": score_spec("my_trick_guess"),
-                    "n_tricks": score_spec("my_n_tricks"),
-                    "cards": {
-                        i: cards_spec(f"my_{i}_card") for i in range(self.last_round)
-                    },
-                },
-                "trick": {
-                    i: cards_spec(f"trick_{i}_card") for i in range(self.last_round)
-                },
-                # "now_predicting": array_spec.BoundedArraySpec(
-                #     shape=(1,),
-                #     name="now_predicting",
-                #     minimum=0,
-                #     maximum=1,
-                #     dtype=np.int32,
-                # ),
-            },
-            "constraint": self._action_mask_spec,
-        }
-        #        super().__init__()
-
         self.reset()
-
-    def action_spec(self):
-        return self._action_spec
-
-    def observation_spec(self):
-        return self._observation_spec
+        assert len(obs2vec(self._state["state"])) == self.observation_dim
 
     def register_state(self, game_state):
         self.round_done = game_state.pop("round_done")
         self.game_done = game_state.pop("game_over")
         self._state = game_state
 
-    def _step(self, action):
-        if self.game_done:
-            _print("new game!")
-            return self.reset()
-        next_state = self.game_com_channel.send(int(action))
-        self.register_state(next_state)
-        _print(f"recieved state {self._state}")
-
-        def calculate_reward():
-            self.last_state = self._state
-            if self.round_done or self.game_done:
-                # my score is the reward
-                reward = float(self._state["state"]["Player_1"]["score"][0])
-                self.last_score = reward
-                return reward
-            else:
-                return -1.0 * abs(
-                    self._state["state"]["Player_1"]["n_tricks"][0]
-                    - self._state["state"]["Player_1"]["trick_guess"][0]
-                )
-
-        reward = calculate_reward()
-        _print("reward: ", reward)
-        if self.game_done:
-            return ts.termination(self._state, reward)
+    def calculate_reward(self):
+        self.last_state = self._state
+        if self.round_done or self.game_done:
+            reward = float(self._state["state"]["Player_1"]["score"])
+            self.last_score = reward
+            return reward
         else:
-            return ts.transition(self._state, reward)  # TODO discount?
+            # FIXME might not be the best way to calculate reward
+            # will favor greedy action
+            return -1.0 * abs(
+                self._state["state"]["Player_1"]["n_tricks"]
+                - self._state["state"]["Player_1"]["trick_guess"]
+            )
 
-    def _reset(self):
+    def step(self, action):
+        next_state = self.game.send(int(action))
+        self.register_state(next_state)
+        debug_print(f"recieved state {self._state}")
+
+        reward = self.calculate_reward()
+        debug_print("reward: ", reward)
+        return obs2vec(self._state["state"]), reward, self.game_done, self._state["constraint"]
+
+    def reset(self):
         self.game_done = False
-        self.game_com_channel = Game(
-            nplayers=2,
+        self.game = Game(
+            nplayers=self.nplayers,
             random_idxs=[0],
-            last_round=self.last_round,
-            print_function=_print,
+            n_rounds=self.n_rounds,
+            print_function=debug_print,
         ).play()
-        initial_game_state = next(self.game_com_channel)
+        initial_game_state = next(self.game)
         self.register_state(initial_game_state)
         self.last_score = 0
         self.last_state = dict()
         self.round_done = False
         self.game_done = False
-        return ts.restart(self._state)
+        return obs2vec(self._state["state"])
 
 
 # to flatten the observation spec
@@ -153,18 +120,30 @@ def flatten_observation(obs):
     return list(flat_dict.values())
 
 
-class MultiWizardEnv(parallel_py_environment.ParallelPyEnvironment):
-    def __init__(self, n_envs=1, with_print=False, **kwargs):
+def one_hot(i, n):
+    a = [0] * n
+    a[i] = 1
+    return a
 
-        env_constructors = [partial(WizardEnv, with_print=with_print)] * n_envs
-        super().__init__(env_constructors, **kwargs)
+
+def obs2vec(obs):
+    vec = []
+    for name, cardholder in obs.items():
+        if "Player" in name:
+            vec.append(cardholder["score"])
+            vec.append(cardholder["trick_guess"])
+            vec.append(cardholder["n_tricks"])
+            cardstack = cardholder["cards"]
+        elif "trick" == name:
+            cardstack = cardholder
+        else:
+            raise Exception(f"wtf {name}")
+        for card in cardstack.values():
+            vec.extend(one_hot(card[0], 6))
+            vec.append(card[1])
+    return vec
 
 
 if __name__ == "__main__":
-    from tf_agents.environments.utils import validate_py_environment
-
-    myEnv = WizardEnv(with_print=False)
-    validate_py_environment(myEnv, episodes=5)
-
-    # my_multi_env = MultiWizardEnv(n_envs=1)
-    # validate_py_environment(my_multi_env)
+    env = WizardEnv(debug=True)
+    state = env.reset()

@@ -1,19 +1,11 @@
 # implementing a wizard game
 import itertools
 import random
-import click
-import numpy as np
 from enum import Enum
 
-from collections.abc import Iterable
-import tensorflow as tf
+import click
 
 random.seed(10)
-# for compliance with the env
-def make_arr(x):
-    if not isinstance(x, Iterable):
-        x = (x,)
-    return tf.constant(x, dtype=np.float32)
 
 
 class GameState(Enum):
@@ -99,7 +91,7 @@ class Card:
             return self.value > other.value
 
     def get_state(self):
-        return make_arr((self.colorcode, self.value))
+        return (self.colorcode, self.value)
 
 
 def fill_invalid(size, cards):
@@ -128,6 +120,7 @@ class CardStack:
         shuffle the card deck
         """
         random.shuffle(self.deck)
+        #FIXME hack
         self.deck.append(Card(Card.blue, 3))
         self.deck.append(Card(Card.blue, 6))
         self.deck.append(Card(Card.blue, 5))
@@ -158,7 +151,7 @@ class Trick:
         return str(self.cards)
 
     def get_state(self, game):
-        return fill_invalid(game.last_round, [c.get_state() for c in self.cards])
+        return fill_invalid(game.n_rounds, [c.get_state() for c in self.cards])
 
     def determine_winner(self, trump):
         winner = 0
@@ -239,9 +232,9 @@ class Player:
 
     def get_state_and_choice_mask(self, game, color_to_serve=None):
         player_state = dict(
-            score=make_arr(self.score),
-            trick_guess=make_arr(self.guessed_tricks),
-            n_tricks=make_arr(self.trick_count),
+            score=self.score,
+            trick_guess=self.guessed_tricks,
+            n_tricks=self.trick_count,
         )
         card_states = [c.get_state() for c in self.cards]
 
@@ -249,19 +242,19 @@ class Player:
 
         # get the choice mask right
         if game.game_state == GameState.PlayingCards:
-            choice_mask = color_mask + [0] * (game.last_round + 1 - len(color_mask))
+            choice_mask = color_mask + [0] * (game.n_rounds + 1 - len(color_mask))
         else:
-            choice_mask = [1] * game.last_round + [1]
+            choice_mask = [1] * game.n_rounds + [1]
 
         # fill with invalid cards
-        player_state["cards"] = fill_invalid(game.last_round, card_states)
-        return player_state, make_arr(choice_mask)
+        player_state["cards"] = fill_invalid(game.n_rounds, card_states)
+        return player_state, choice_mask
 
 
 class Game:
-    def __init__(self, nplayers, random_idxs=[0], last_round=3, print_function=print):
+    def __init__(self, nplayers, random_idxs=[0], n_rounds=3, print_function=print):
         self.nplayers = nplayers
-        self.last_round = last_round
+        self.n_rounds = n_rounds
         self.players = [Player(i, i in random_idxs) for i in range(nplayers)]
         self._random_idxs = random_idxs
         self.current_trick = Trick()
@@ -273,8 +266,8 @@ class Game:
         _print("Lets go!")
 
         for r in range(
-            self.last_round - 1, self.last_round
-        ):  # FIXME from 0 till last_round
+            self.n_rounds - 1, self.n_rounds
+        ):  # FIXME / temporary, correct is from 0 till n_rounds
             yield from self.play_round(r + 1)
             _print("Scores after round {}:\n".format(r + 1))
             for p in self.players:
@@ -294,7 +287,7 @@ class Game:
         yield self.get_state_and_choice_mask()
 
     def play_round(self, Round):
-        trump = None  # random.choice(Card.normal_colors + (None,))
+        trump = None  # FIXME random.choice(Card.normal_colors + (None,))
         _print(f"\nTRUMP FOR THIS ROUND: {trump}")
         _print(f"\n\nStarting round {Round}\n")
         cards = CardStack()
@@ -311,7 +304,7 @@ class Game:
         winner_idx = 0  # not really, only the guy who starts
         players = self.players  # we will be rotating this one
         self.game_state = GameState.PlayingCards
-        for _ in range(Round):  # there are #rounds cards per player
+        for _ in range(Round):  # there are n_rounds cards per player
             self.current_trick = Trick()
             players = rotate(players, winner_idx)
             for p in players:
@@ -348,7 +341,7 @@ class Game:
             )
             game_state[f"Player_{p.n}"] = state
             if not p.random:  # CAUTION works only for 1 non-random player
-                player_choice_mask = make_arr(choice_mask)
+                player_choice_mask = choice_mask
         game_state["trick"] = self.current_trick.get_state(self)
         return {
             "state": game_state,
