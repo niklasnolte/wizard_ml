@@ -121,10 +121,10 @@ class CardStack:
         """
         random.shuffle(self.deck)
         #FIXME hack
-        self.deck.append(Card(Card.blue, 3))
-        self.deck.append(Card(Card.blue, 6))
-        self.deck.append(Card(Card.blue, 5))
-        self.deck.append(Card(Card.blue, 4))
+        # self.deck.append(Card(Card.blue, 3))
+        # self.deck.append(Card(Card.blue, 6))
+        # self.deck.append(Card(Card.blue, 5))
+        # self.deck.append(Card(Card.blue, 4))
 
     def draw(self):
         return self.deck.pop(-1)
