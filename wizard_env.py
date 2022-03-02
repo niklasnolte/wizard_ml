@@ -71,10 +71,11 @@ class WizardEnv:
         else:
             # FIXME might not be the best way to calculate reward
             # will favor greedy action
-            return -1.0 * abs(
-                self._state["state"]["Player_1"]["n_tricks"]
-                - self._state["state"]["Player_1"]["trick_guess"]
-            )
+            return 0
+            # return -1.0 * abs(
+            #     self._state["state"]["Player_1"]["n_tricks"]
+            #     - self._state["state"]["Player_1"]["trick_guess"]
+            # )
 
     def step(self, action):
         next_state = self.game.send(int(action))

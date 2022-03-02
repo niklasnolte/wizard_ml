@@ -31,7 +31,7 @@ class Agent:
         self.discount = discount
         self.explore_prob = explore_prob
         self.optimizer = torch.optim.Adam(
-            self.state_value_predictor.parameters(), lr=1e-1
+            self.state_value_predictor.parameters(), lr=1e-2
         )
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(
             self.optimizer, gamma=0.97
