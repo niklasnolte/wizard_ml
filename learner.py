@@ -106,6 +106,8 @@ def get_model(n_inputs, n_outputs):
         torch.nn.ReLU(),
         torch.nn.Linear(128, 128),
         torch.nn.ReLU(),
+        torch.nn.Linear(128, 128),
+        torch.nn.ReLU(),
         torch.nn.Linear(128, n_outputs),
     )
 
@@ -123,13 +125,13 @@ def main():
     for _ in tqdm(range(3000)):
         agent.run_episode()
 
-    agent.explore_prob = .5
-    bar = tqdm(range(1000))
+    agent.explore_prob = .9
+    bar = tqdm(range(50000))
     rewards = []
     horizon = 100
     for _ in bar:
         cumrewards = agent.run_episode()
-        loss = agent.train(50)
+        loss = agent.train(100)
         agent.explore_prob *= .99
         rewards += [cumrewards]
         bar.set_description(f"Loss: {loss:.3f}, current reward: {cumrewards:<2.0f} reward mean: {mean(rewards[-horizon:]):.3f}")

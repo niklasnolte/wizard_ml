@@ -194,7 +194,8 @@ class Player:
     def play_card(self, game, color_to_serve=None):
         while True:
             if self.random:
-                index = random.choice(list(range(len(self.cards))))
+                #index = 0 #FIXME random player
+                index = random.choice(range(len(self.cards)))
             else:
                 index = yield from game.prompt("Pick index of card to play", type=int)
             try:
@@ -252,7 +253,7 @@ class Player:
 
 
 class Game:
-    def __init__(self, nplayers, random_idxs=[0], n_rounds=3, print_function=print):
+    def __init__(self, nplayers, random_idxs=[0], n_rounds=5, print_function=print):
         self.nplayers = nplayers
         self.n_rounds = n_rounds
         self.players = [Player(i, i in random_idxs) for i in range(nplayers)]
