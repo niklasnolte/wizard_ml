@@ -348,7 +348,6 @@ class Game:
             "state": game_state,
             "constraint": player_choice_mask,
             "round_done": self.game_state == GameState.RoundFinished,
-            # "now_predicting": int(self.game_state == GameState.GuessingTricks),
             "game_over": self.game_state == GameState.Done,
         }
 

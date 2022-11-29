@@ -12,36 +12,10 @@ from game import Game
 # action_mask type = List[bool]
 # trick guess type = Int[0,n_rounds]
 
-# observation =
-#     "state": {
-#         "Player_0": {
-#             "score": score_spec("enemy_score"),
-#             "trick_guess": score_spec("enemy_trick_guess"),
-#             "n_tricks": score_spec("enemy_n_tricks"),
-#             "cards": {
-#                 i: cards_spec(f"enemy_{i}_card") for i in range(self.n_rounds)
-#             },
-#         },
-#         "Player_1": {
-#             "score": score_spec("my_score"),
-#             "trick_guess": score_spec("my_trick_guess"),
-#             "n_tricks": score_spec("my_n_tricks"),
-#             "cards": {
-#                 i: cards_spec(f"my_{i}_card") for i in range(self.n_rounds)
-#             },
-#         },
-#         "trick": {
-#             i: cards_spec(f"trick_{i}_card") for i in range(self.n_rounds)
-#         },
-#     },
-#     "constraint": self._action_mask_spec,
-# }
-
 
 class WizardEnv:
     def __init__(self, debug=False, nplayers=2, n_rounds=2):
-        global debug_print
-        debug_print = print if debug else (lambda *args, **kwargs: None)
+        self.debug_print = print if debug else (lambda *args, **kwargs: None)
 
         self.game_done = False
         self.n_rounds = n_rounds
@@ -80,10 +54,10 @@ class WizardEnv:
     def step(self, action):
         next_state = self.game.send(int(action))
         self.register_state(next_state)
-        debug_print(f"recieved state {self._state}")
+        self.debug_print(f"recieved state {self._state}")
 
         reward = self.calculate_reward()
-        debug_print("reward: ", reward)
+        self.debug_print("reward: ", reward)
         return obs2vec(self._state["state"]), reward, self.game_done, self._state["constraint"]
 
     def reset(self):
@@ -92,7 +66,7 @@ class WizardEnv:
             nplayers=self.nplayers,
             random_idxs=[0],
             n_rounds=self.n_rounds,
-            print_function=debug_print,
+            print_function=self.debug_print,
         ).play()
         initial_game_state = next(self.game)
         self.register_state(initial_game_state)
@@ -101,24 +75,6 @@ class WizardEnv:
         self.round_done = False
         self.game_done = False
         return obs2vec(self._state["state"])
-
-
-# to flatten the observation spec
-def flatten_dict(dd, separator="_", prefix=""):
-    return (
-        {
-            prefix + separator + str(k) if prefix else str(k): v
-            for kk, vv in dd.items()
-            for k, v in flatten_dict(vv, separator, kk).items()
-        }
-        if isinstance(dd, dict)
-        else {prefix: dd}
-    )
-
-
-def flatten_observation(obs):
-    flat_dict = flatten_dict(obs)
-    return list(flat_dict.values())
 
 
 def one_hot(i, n):

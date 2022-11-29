@@ -73,7 +73,7 @@ class Agent:
         out = argmax(values[0], self.action_mask)
         return out
 
-    def train(self, epochs=20):
+    def train(self, epochs=20, update_action_decider=True):
         states, actions, scores = self.sample_memory(size=256)
         for _ in range(epochs):
             self.optimizer.zero_grad()
@@ -87,8 +87,9 @@ class Agent:
             )
             loss.backward()
             self.optimizer.step()
-        self.scheduler.step()
-        self.action_decider.load_state_dict(self.state_value_predictor.state_dict())
+        #self.scheduler.step()
+        if update_action_decider:
+          self.action_decider.load_state_dict(self.state_value_predictor.state_dict())
         return loss.item()
 
     def sample_memory(self, size):
@@ -112,7 +113,7 @@ def get_model(n_inputs, n_outputs):
     )
 
 
-def main():
+if __name__ == "__main__":
     env = WizardEnv(debug=False)
     n_inputs = env.observation_dim
     n_outputs = len(env.action_space)
@@ -125,17 +126,15 @@ def main():
     for _ in tqdm(range(3000)):
         agent.run_episode()
 
-    agent.explore_prob = .9
-    bar = tqdm(range(50000))
+    agent.explore_prob = 1
+    bar = tqdm(range(2000))
     rewards = []
     horizon = 100
-    for _ in bar:
+    greedy_decay = (.01)**(1/len(bar))
+    for i in bar:
         cumrewards = agent.run_episode()
-        loss = agent.train(100)
-        agent.explore_prob *= .99
+        loss = agent.train(20, i % 10 == 0)
+        # explore prob should be very small at the end
+        agent.explore_prob *= greedy_decay
         rewards += [cumrewards]
         bar.set_description(f"Loss: {loss:.3f}, current reward: {cumrewards:<2.0f} reward mean: {mean(rewards[-horizon:]):.3f}")
-
-
-if __name__ == "__main__":
-    main()
