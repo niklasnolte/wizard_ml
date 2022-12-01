@@ -52,7 +52,7 @@ class WizardEnv:
             # )
 
     def step(self, action):
-        next_state = self.game.send(int(action))
+        next_state = self.game_it.send(int(action))
         self.register_state(next_state)
         self.debug_print(f"recieved state {self._state}")
 
@@ -67,8 +67,9 @@ class WizardEnv:
             random_idxs=[0],
             n_rounds=self.n_rounds,
             print_function=self.debug_print,
-        ).play()
-        initial_game_state = next(self.game)
+        )
+        self.game_it = self.game.play()
+        initial_game_state = next(self.game_it)
         self.register_state(initial_game_state)
         self.last_score = 0
         self.last_state = dict()
@@ -76,6 +77,9 @@ class WizardEnv:
         self.game_done = False
         return obs2vec(self._state["state"])
 
+    @property
+    def game_state(self):
+      return self.game.game_state
 
 def one_hot(i, n):
     a = [0] * n

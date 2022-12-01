@@ -121,10 +121,10 @@ class CardStack:
         """
         random.shuffle(self.deck)
         #FIXME hack
-        # self.deck.append(Card(Card.blue, 3))
-        # self.deck.append(Card(Card.blue, 6))
-        # self.deck.append(Card(Card.blue, 5))
-        # self.deck.append(Card(Card.blue, 4))
+        self.deck.append(Card(Card.blue, 3))
+        self.deck.append(Card(Card.blue, 6))
+        self.deck.append(Card(Card.blue, 5))
+        self.deck.append(Card(Card.blue, 4))
 
     def draw(self):
         return self.deck.pop(-1)
@@ -194,8 +194,8 @@ class Player:
     def play_card(self, game, color_to_serve=None):
         while True:
             if self.random:
-                #index = 0 #FIXME random player
-                index = random.choice(range(len(self.cards)))
+                index = 0 #FIXME this is not a random player
+                #index = random.choice(range(len(self.cards)))
             else:
                 index = yield from game.prompt("Pick index of card to play", type=int)
             try:
@@ -243,9 +243,9 @@ class Player:
 
         # get the choice mask right
         if game.game_state == GameState.PlayingCards:
-            choice_mask = color_mask + [0] * (game.n_rounds + 1 - len(color_mask))
+            choice_mask = color_mask + [False] * (game.n_rounds + 1 - len(color_mask))
         else:
-            choice_mask = [1] * game.n_rounds + [1]
+            choice_mask = [1] * game.n_rounds + [True]
 
         # fill with invalid cards
         player_state["cards"] = fill_invalid(game.n_rounds, card_states)
@@ -341,7 +341,7 @@ class Game:
                 self, self.current_trick.color_to_serve()
             )
             game_state[f"Player_{p.n}"] = state
-            if not p.random:  # CAUTION works only for 1 non-random player
+            if not p.random:  # TODO CAUTION works only for 1 non-random player
                 player_choice_mask = choice_mask
         game_state["trick"] = self.current_trick.get_state(self)
         return {
