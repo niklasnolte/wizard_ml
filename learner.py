@@ -22,9 +22,9 @@ class Agent:
         card_decider,
         trick_decider,
         explore_prob=0.5,
-        discount=0.95,
+        discount=0.9,
         device=None,
-        bufsize=5000,
+        bufsize=10000,
     ):
         self.device = device or torch.device("cuda:0")
         self.card_value_predictor = card_value_predictor.to(self.device)
@@ -74,7 +74,7 @@ class Agent:
         while not done:
             guessing_tricks.append(self.env.game_state == GameState.GuessingTricks)
             action = self.get_next_action(state, self.explore_prob)
-            state, reward, done, constraint = self.env.step(action)
+            new_state, reward, done, constraint = self.env.step(action)
             self.action_mask = constraint
             if guessing_tricks[-1]:
                 self.trick_states.add(state)
@@ -82,18 +82,19 @@ class Agent:
             else:
                 self.card_states.add(state)
                 self.card_actions.add(action)
+            state = new_state
             current_rewards.append(reward)
 
         # calculate cumulative rewards
+        # TODO dont play the entirety of the game, but only one match (n cards -> n tricks -> max of 2+n reward)
         for i in range(len(current_rewards)):
             G = 0
             for j in range(i, len(current_rewards)):
-                G += current_rewards[j] * self.discount ** (j - i)
+                G += current_rewards[j] * self.discount ** (j - i) # TODO maybe MCTS
             if guessing_tricks[i]:
                 self.trick_state_scores.add(G)
             else:
                 self.card_state_scores.add(G)
-
         return sum(current_rewards)
 
     def get_next_action(self, state, eps):
@@ -118,10 +119,10 @@ class Agent:
             (self.card_decider, self.trick_decider),
             (False, True),
         ):
-            states, actions, scores = self.sample_memory(
-                size=1024, for_tricks=for_tricks
-            )
             for _ in range(epochs):
+                states, actions, scores = self.sample_memory(
+                    size=self.bufsize//8, for_tricks=for_tricks
+                )
                 optim.zero_grad()
                 state_values = predictor(states)
                 # maybe FIXME:
@@ -137,7 +138,7 @@ class Agent:
             # test the decider
             with torch.no_grad():
               states, actions, scores = self.sample_memory(
-                  size=256, for_tricks=for_tricks
+                  size=self.bufsize//4, for_tricks=for_tricks
               )
               state_values = predictor(states)
               decider_loss = torch.nn.functional.mse_loss(
@@ -165,19 +166,23 @@ class Agent:
 
 
 def get_model(n_inputs, n_outputs):
+    next_power_of_two = 2 ** (n_inputs - 1).bit_length()
     return torch.nn.Sequential(
-        torch.nn.Linear(n_inputs, 32),
+        torch.nn.Linear(n_inputs, next_power_of_two),
         torch.nn.ReLU(),
-        torch.nn.Linear(32, 32),
+        torch.nn.Linear(next_power_of_two, next_power_of_two),
         torch.nn.ReLU(),
-        torch.nn.Linear(32, 32),
+        torch.nn.Linear(next_power_of_two, next_power_of_two),
         torch.nn.ReLU(),
-        torch.nn.Linear(32, n_outputs),
+        torch.nn.Linear(next_power_of_two, next_power_of_two),
+        torch.nn.ReLU(),
+        torch.nn.Linear(next_power_of_two, n_outputs),
     )
 
 
 if __name__ == "__main__":
-    env = WizardEnv(debug=False)
+    EPOCHS = 50000
+    env = WizardEnv(debug=False, n_rounds = 5)
     n_inputs = env.observation_dim
     n_outputs = len(env.action_space)
     state_value_predictor = get_model(n_inputs, n_outputs)
@@ -192,14 +197,14 @@ if __name__ == "__main__":
         deepcopy(action_decider),
     )
     agent.explore_prob = 1
-    for _ in tqdm(range(3000)):
+    for _ in tqdm(range(agent.bufsize)):
         agent.run_episode()
 
-    bar = tqdm(range(1000))
+    bar = tqdm(range(EPOCHS))
     rewards = []
     horizon = 100
-    agent.explore_prob *= .1
-    greedy_decay = (0.01) ** (1 / len(bar))
+    agent.explore_prob *= 1
+    greedy_decay = (0.001) ** (1 / len(bar))
     for i in bar:
         cumrewards = agent.run_episode()
         trick_loss, card_loss = agent.train(10, i % 5 == 0)
@@ -209,4 +214,6 @@ if __name__ == "__main__":
         bar.set_description(
             f"Trick loss: {trick_loss:.3f}, Card loss: {card_loss:.3f}, current reward: {cumrewards:<2.0f} reward mean: {mean(rewards[-horizon:]):.3f}"
         )
+
+    env.debug_print = print
     from IPython import embed; embed()

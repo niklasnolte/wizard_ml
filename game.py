@@ -30,7 +30,7 @@ class Card:
         y: x for x, y in enumerate([invalid_color, white, red, blue, green, yellow])
     }
 
-    normal_colors = (red, blue, green, yellow)
+    normal_colors = (red,)# blue, green, yellow)
     normal_values = list(range(1, 14))
     joker_color = wizard_color = white
     joker_value = 0
@@ -121,10 +121,10 @@ class CardStack:
         """
         random.shuffle(self.deck)
         #FIXME hack
-        self.deck.append(Card(Card.blue, 3))
-        self.deck.append(Card(Card.blue, 6))
-        self.deck.append(Card(Card.blue, 5))
-        self.deck.append(Card(Card.blue, 4))
+        # self.deck.append(Card(Card.blue, 3))
+        # self.deck.append(Card(Card.blue, 6))
+        # self.deck.append(Card(Card.blue, 5))
+        # self.deck.append(Card(Card.blue, 4))
 
     def draw(self):
         return self.deck.pop(-1)

@@ -1,4 +1,4 @@
-from game import Game
+from game import Game, Card
 
 # 0 = invalid
 # 1 = white
@@ -94,7 +94,10 @@ def obs2vec(obs):
             vec.append(cardholder["score"])
             vec.append(cardholder["trick_guess"])
             vec.append(cardholder["n_tricks"])
-            cardstack = cardholder["cards"]
+            if name == "Player_1":
+              cardstack = cardholder["cards"]
+            else:
+              cardstack = {i:(0,-1) for i,_ in enumerate(cardholder["cards"])} # FIXME cards visible?
         elif "trick" == name:
             cardstack = cardholder
         else:
